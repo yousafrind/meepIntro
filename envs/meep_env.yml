@@ -1,0 +1,16 @@
+name: meep
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - meep                  # FDTD solver (pulls libmeep, h5py, libhdf5)
+  - mpi4py                # MPI bindings (needed by run.py + MEEP parallelism)
+  - numpy
+  - scipy
+  - matplotlib
+  - pip:
+      # Phase 3 (RCWA + GPU) — install separately with ROCm wheel if available
+      # CPU fallback works out of the box:
+      - torch              # swap for ROCm build: pip install torch --index-url https://download.pytorch.org/whl/rocm6.0
+      - torcwa             # PyTorch RCWA solver (Phase 3)
