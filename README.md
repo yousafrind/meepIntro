@@ -115,7 +115,7 @@ meepIntro/
 │   ├── device.py                   ← CPU/GPU detection
 │   ├── materials.py                ← n,k loader → MEEP Medium
 │   └── viz.py                      ← shared plotting helpers
-├── 01_beam_steering/
+├── 01_beam_steering/               ← see 01_beam_steering/README.md
 │   ├── unit_cell_sweep.py          ← step 1: build phase library
 │   ├── full_array_sim.py           ← step 2: full metasurface FDTD
 │   └── results/                    ← auto-created: plots + data
@@ -123,6 +123,63 @@ meepIntro/
 ├── 03_holography/
 └── 04_absorption/
 ```
+
+---
+
+## Utils API
+
+### `utils/materials.py` — Material loader
+
+```python
+from utils.materials import load_material
+
+mat = load_material("TiO2")               # bundled short name
+mat = load_material("path/to/my_nk.txt")  # custom file
+
+n   = mat.n(0.532)           # interpolated refractive index
+k   = mat.k(0.532)           # interpolated extinction coefficient
+med = mat(0.532)             # → mp.Medium at λ=532 nm (shorthand)
+```
+
+Reads space-separated n,k files (compatible with refractiveindex.info exports).
+Interpolates linearly; warns if the requested wavelength is outside the
+tabulated range. For lossy materials (k > 0) it converts to MEEP's
+`D_conductivity` representation.
+
+Bundled names: `"TiO2"`, `"SiO2"`, `"glass"`.
+
+---
+
+### `utils/device.py` — Compute resource detection
+
+```python
+from utils.device import get_cpu_count, get_torch_device, print_platform_info
+
+ncpu = get_cpu_count()          # logical CPU count
+dev  = get_torch_device()       # torch.device or None
+print_platform_info()           # prints CPU / MPI / GPU summary
+```
+
+`get_torch_device()` returns `cuda` for both CUDA and ROCm builds (PyTorch
+exposes ROCm as `cuda`). Returns `None` if PyTorch is not installed — safe
+to call in Phase 1/2 where PyTorch is not required.
+
+---
+
+### `utils/viz.py` — Plotting helpers
+
+All functions save PNG files to disk (Matplotlib `Agg` backend — no display
+needed, works in WSL/headless).
+
+| Function | Output |
+|----------|--------|
+| `plot_phase_library(widths, phases, amplitudes, ...)` | 4-panel phase/amplitude sweep plot |
+| `plot_angular_spectrum(theta, intensity, ...)` | Linear + log farfield plot |
+| `plot_fields(sim, component, filename)` | 2D MEEP near-field snapshot |
+| `plot_epsilon(sim, filename)` | Permittivity cross-section |
+| `plot_pillar_layout(x_positions, widths, ...)` | Pillar geometry + phase profile |
+
+Output directories are created automatically.
 
 ---
 
