@@ -160,6 +160,44 @@ python run.py 03_holography/hologram_sim.py --target-angles -45 0 45
 
 ## Utils modules
 
+### `utils/sweep.py`
+Central unit-cell sweep engine used by all Phase 1 sims.
+
+```python
+from utils.sweep import sweep, PhaseLibrary, run_unit_cell
+
+# Build a new library (runs MEEP)
+lib = sweep(
+    material="TiO2", wavelength=0.532, period=0.25, height=0.60,
+    n_glass=1.5, resolution=64,
+    n_widths=50,        # OR: phase_step=5.0 (degrees) for adaptive sampling
+)
+lib.save("results/phase_library.npz")
+
+# Load an existing library
+lib = PhaseLibrary.load("results/phase_library.npz")
+print(lib.phase_coverage())           # total phase range in degrees
+widths, errors = lib.assign_widths(target_phases_rad)  # nearest-neighbour lookup
+
+# Dict-style access (backward compatible with raw np.load)
+lib["widths"], lib["phases"], lib["period"], lib["material"]
+```
+
+Can also be run standalone as a script:
+```bash
+# Same as running 01_beam_steering/unit_cell_sweep.py but more flexible
+python run.py utils/sweep.py --outdir 01_beam_steering/results
+
+# Adaptive mode: sample every 5° of phase (auto-computes n_widths)
+python run.py utils/sweep.py --phase-step 5 --outdir my_sim/results
+
+# Different geometry
+python run.py utils/sweep.py --material SiO2 --height 0.80 --period 0.30
+```
+
+`--phase-step DEG` runs a 15-point coarse sweep first to estimate phase coverage,
+then computes the n_widths needed to achieve ≤ DEG spacing before the full sweep.
+
 ### `utils/materials.py`
 ```python
 from utils.materials import load_material

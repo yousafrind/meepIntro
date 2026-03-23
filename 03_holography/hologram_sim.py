@@ -68,6 +68,7 @@ sys.path.insert(0, _ROOT)
 
 from utils.device    import print_platform_info
 from utils.materials import load_material
+from utils.sweep     import PhaseLibrary
 from utils.viz       import (plot_epsilon, plot_pillar_layout,
                               plot_hologram_comparison)
 
@@ -121,40 +122,25 @@ def parse_args():
 # ─────────────────────────────────────────────────────────────────────────────
 
 def load_phase_library(lib_path_arg):
+    """Resolve lib_path_arg and return a PhaseLibrary."""
     if lib_path_arg == "auto":
         path = os.path.normpath(os.path.join(
             _HERE, "..", "01_beam_steering", "results", "phase_library.npz"
         ))
     else:
         path = lib_path_arg
-    if not os.path.exists(path):
+    try:
+        return PhaseLibrary.load(path)
+    except FileNotFoundError as e:
         sys.exit(
-            f"\n[error] Phase library not found: {path}\n"
-            "        Run unit_cell_sweep.py first:\n"
+            f"\n[error] {e}\n"
             "          python run.py 01_beam_steering/unit_cell_sweep.py\n"
         )
-    data = np.load(path, allow_pickle=True)
-    print(f"[library] Loaded: {path}")
-    return data
 
 
 def assign_pillar_widths(lib, target_phases):
-    """Nearest-neighbour phase → width lookup. Same as 01 and 02."""
-    w_lib       = lib["widths"]
-    ph_lib_norm = lib["phases"] % (2 * np.pi)
-
-    assigned = np.zeros(len(target_phases))
-    errors   = np.zeros(len(target_phases))
-
-    for i, phi in enumerate(target_phases):
-        phi_norm = phi % (2 * np.pi)
-        diff     = np.abs(ph_lib_norm - phi_norm)
-        diff     = np.minimum(diff, 2 * np.pi - diff)
-        idx      = int(np.argmin(diff))
-        assigned[i] = w_lib[idx]
-        errors[i]   = np.degrees(diff[idx])
-
-    return assigned, errors
+    """Delegate to PhaseLibrary.assign_widths (kept for call-site compat)."""
+    return lib.assign_widths(target_phases)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
