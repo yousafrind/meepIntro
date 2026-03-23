@@ -16,8 +16,10 @@ Phase 3: Solver comparison — FDTD (MEEP) vs RCWA vs torcwa (GPU)
 Phase 4: Surrogate-model optimisation (PyTorch / ROCm)
 ```
 
-**Current status:** Phase 1 in progress. Only `01_beam_steering/` is implemented.
-`02_metalens/`, `03_holography/`, `04_absorption/` are stubs (empty dirs).
+**Current status:** Phase 1 in progress.
+- `01_beam_steering/` — complete (unit cell sweep + full array sim)
+- `02_metalens/` — complete (metalens phase profile + MEEP FDTD + ASM focal spot analysis)
+- `03_holography/`, `04_absorption/` — not yet started
 
 ---
 
@@ -54,7 +56,7 @@ If `mpirun` is on PATH and nprocs > 1, launches with MPI. Otherwise single-proce
 
 ---
 
-## 01_beam_steering — the only implemented example
+## 01_beam_steering
 
 **Two-step workflow:**
 
@@ -90,6 +92,37 @@ Phase libraries for TM and TE differ; must sweep separately.
 
 ---
 
+## 02_metalens
+
+**Workflow** (reuses phase library from 01_beam_steering — no re-sweep needed):
+
+```
+01_beam_steering/results/phase_library.npz  →  metalens_sim.py
+```
+
+**metalens_sim.py** — applies quadratic phase φ(x) = -k₀(√(x²+f²) - f), assigns
+pillar widths, runs 2D MEEP, then propagates the DFT near-field to the focal
+plane via the **Angular Spectrum Method (ASM)**.
+Output: `results/epsilon_map.png`, `results/metalens_layout.png`,
+        `results/focal_spot.png`, `results/field_propagation.png`,
+        `results/focal_spot.npz`
+
+**Key parameters:**
+
+| Parameter | Default | Note |
+|-----------|---------|------|
+| `WAVELENGTH` | 0.532 μm | Free-space wavelength |
+| `FOCAL_LEN` | 10.0 μm | Focal length |
+| `LENS_WIDTH` | 5.0 μm | Lens aperture |
+| `PILLAR_H` | 0.60 μm | Must match unit_cell_sweep |
+| `RESOLUTION` | 32 px/μm | 32=fast preview, 64=accurate |
+| `N_ASM` | 200 | Y-planes in the 2D field propagation map |
+
+**Expected results** (defaults): NA ≈ 0.24, FWHM ≈ 1–2× diffraction limit (1.1 μm).
+`field_propagation.png` shows |Ez|² concentrating at y ≈ f above the lens.
+
+---
+
 ## Utils modules
 
 ### `utils/materials.py`
@@ -120,6 +153,8 @@ Key functions:
 - `plot_epsilon(sim, filename)` — permittivity map
 - `plot_fields(sim, component, filename)` — near-field snapshot
 - `plot_pillar_layout(...)` — geometry + phase profile
+- `plot_focal_spot(...)` — |Ez|² at focal plane with FWHM annotation
+- `plot_field_propagation(...)` — 2D |Ez|² field map showing beam focusing
 
 ---
 
@@ -161,7 +196,8 @@ pip install torch --index-url https://download.pytorch.org/whl/rocm6.0
 
 ## What's next (Phase 1 remaining work)
 
-- [ ] `02_metalens/` — near-to-far field transform, focal spot characterisation
+- [x] `01_beam_steering/` — done
+- [x] `02_metalens/` — done
 - [ ] `03_holography/` — complex amplitude encoding, farfield hologram
 - [ ] `04_absorption/` — transmission spectra, harminv for resonance finding
 - [ ] Phase 2: benchmark resolution/symmetry/MPI scaling on 01_beam_steering
