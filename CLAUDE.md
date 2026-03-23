@@ -19,7 +19,8 @@ Phase 4: Surrogate-model optimisation (PyTorch / ROCm)
 **Current status:** Phase 1 in progress.
 - `01_beam_steering/` — complete (unit cell sweep + full array sim)
 - `02_metalens/` — complete (metalens phase profile + MEEP FDTD + ASM focal spot analysis)
-- `03_holography/`, `04_absorption/` — not yet started
+- `03_holography/` — complete (Gerchberg-Saxton phase retrieval + MEEP FDTD validation)
+- `04_absorption/` — not yet started
 
 ---
 
@@ -123,7 +124,79 @@ Output: `results/epsilon_map.png`, `results/metalens_layout.png`,
 
 ---
 
+## 03_holography
+
+**Workflow** (reuses phase library from 01_beam_steering):
+
+```
+01_beam_steering/results/phase_library.npz  →  hologram_sim.py
+```
+
+**hologram_sim.py** — Gerchberg-Saxton (GS) iterative phase retrieval computes
+the hologram phase profile that reconstructs target farfield spots. Assigns
+pillar widths, runs MEEP, compares simulated farfield to GS target.
+Output: `results/epsilon_map.png`, `results/hologram_layout.png`,
+        `results/hologram_comparison.png`, `results/hologram.npz`
+
+**Key parameters:**
+
+| Parameter | Default | Note |
+|-----------|---------|------|
+| `WAVELENGTH` | 0.532 μm | Free-space wavelength |
+| `HOLO_WIDTH` | 10.0 μm | Hologram aperture (40 pillars at period=250 nm) |
+| `TARGET_ANGLES` | -30°, +30° | Farfield target spot angles (space-separated) |
+| `N_GS` | 100 | GS iterations |
+| `PILLAR_H` | 0.60 μm | Must match unit_cell_sweep |
+| `RESOLUTION` | 32 px/μm | 32=fast preview, 64=accurate |
+
+```bash
+# Custom target angles
+python run.py 03_holography/hologram_sim.py --target-angles -45 0 45
+```
+
+**Expected results**: GS efficiency ~40–50%; MEEP combined spot efficiency ~25–45%.
+
+---
+
 ## Utils modules
+
+### `utils/sweep.py`
+Central unit-cell sweep engine used by all Phase 1 sims.
+
+```python
+from utils.sweep import sweep, PhaseLibrary, run_unit_cell
+
+# Build a new library (runs MEEP)
+lib = sweep(
+    material="TiO2", wavelength=0.532, period=0.25, height=0.60,
+    n_glass=1.5, resolution=64,
+    n_widths=50,        # OR: phase_step=5.0 (degrees) for adaptive sampling
+)
+lib.save("results/phase_library.npz")
+
+# Load an existing library
+lib = PhaseLibrary.load("results/phase_library.npz")
+print(lib.phase_coverage())           # total phase range in degrees
+widths, errors = lib.assign_widths(target_phases_rad)  # nearest-neighbour lookup
+
+# Dict-style access (backward compatible with raw np.load)
+lib["widths"], lib["phases"], lib["period"], lib["material"]
+```
+
+Can also be run standalone as a script:
+```bash
+# Same as running 01_beam_steering/unit_cell_sweep.py but more flexible
+python run.py utils/sweep.py --outdir 01_beam_steering/results
+
+# Adaptive mode: sample every 5° of phase (auto-computes n_widths)
+python run.py utils/sweep.py --phase-step 5 --outdir my_sim/results
+
+# Different geometry
+python run.py utils/sweep.py --material SiO2 --height 0.80 --period 0.30
+```
+
+`--phase-step DEG` runs a 15-point coarse sweep first to estimate phase coverage,
+then computes the n_widths needed to achieve ≤ DEG spacing before the full sweep.
 
 ### `utils/materials.py`
 ```python
@@ -155,6 +228,7 @@ Key functions:
 - `plot_pillar_layout(...)` — geometry + phase profile
 - `plot_focal_spot(...)` — |Ez|² at focal plane with FWHM annotation
 - `plot_field_propagation(...)` — 2D |Ez|² field map showing beam focusing
+- `plot_hologram_comparison(...)` — simulated farfield vs target markers + phase profile
 
 ---
 
@@ -198,6 +272,6 @@ pip install torch --index-url https://download.pytorch.org/whl/rocm6.0
 
 - [x] `01_beam_steering/` — done
 - [x] `02_metalens/` — done
-- [ ] `03_holography/` — complex amplitude encoding, farfield hologram
+- [x] `03_holography/` — done
 - [ ] `04_absorption/` — transmission spectra, harminv for resonance finding
 - [ ] Phase 2: benchmark resolution/symmetry/MPI scaling on 01_beam_steering
