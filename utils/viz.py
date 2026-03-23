@@ -182,6 +182,100 @@ def plot_epsilon(sim, filename, title="Permittivity"):
 # Pillar layout visualisation
 # ──────────────────────────────────────────────────────────────────────────────
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Metalens focal spot plots
+# ──────────────────────────────────────────────────────────────────────────────
+
+def plot_focal_spot(x_um, intensity, fwhm_um, diffraction_limit_um,
+                   focal_len, wavelength, filename):
+    """
+    Plot the intensity profile at the focal plane of a metalens.
+
+    Parameters
+    ----------
+    x_um               : array  x positions in μm
+    intensity          : array  |Ez|² at focal plane
+    fwhm_um            : float or None  measured FWHM in μm
+    diffraction_limit_um : float  ideal FWHM = 0.5λ/NA in μm
+    focal_len          : float  focal length in μm
+    wavelength         : float  free-space wavelength in μm
+    filename           : str    output PNG path
+    """
+    _ensure_dir(filename)
+    norm = intensity / intensity.max() if intensity.max() > 0 else intensity
+
+    fig, ax = plt.subplots(figsize=(9, 5))
+    ax.plot(x_um, norm, "b-", lw=1.8, label="FDTD (MEEP)")
+    ax.axhline(0.5, color="gray", ls="--", lw=1.0, label="Half-maximum")
+
+    title_parts = [f"Focal Spot  |  λ = {wavelength*1000:.0f} nm",
+                   f"f = {focal_len:.1f} μm"]
+    if fwhm_um is not None:
+        ax.axvspan(-fwhm_um/2, fwhm_um/2, alpha=0.12, color="blue",
+                   label=f"FWHM = {fwhm_um*1000:.0f} nm")
+        title_parts.append(f"FWHM = {fwhm_um*1000:.0f} nm  "
+                           f"(limit = {diffraction_limit_um*1000:.0f} nm)")
+
+    ax.set_xlabel("x (μm)")
+    ax.set_ylabel("Normalised |Ez|²")
+    ax.set_title("  |  ".join(title_parts))
+    ax.set_xlim(x_um[0], x_um[-1])
+    ax.set_ylim(0, 1.05)
+    ax.legend(loc="upper right")
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(filename, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"[viz] Saved: {filename}")
+
+
+def plot_field_propagation(x_um, y_um, intensity_2d,
+                           focal_len, y_pillar_top, filename):
+    """
+    2D false-colour plot of |Ez|² showing beam focusing above the metalens.
+
+    Parameters
+    ----------
+    x_um          : 1D array  x positions in μm (horizontal axis)
+    y_um          : 1D array  propagation y positions in μm (vertical axis)
+    intensity_2d  : 2D array  shape (len(y_um), len(x_um))  —  |Ez|²
+    focal_len     : float     focal length in μm (draws a horizontal marker)
+    y_pillar_top  : float     y coordinate of pillar tops in μm
+    filename      : str       output PNG path
+    """
+    _ensure_dir(filename)
+
+    fig, ax = plt.subplots(figsize=(8, 9))
+
+    # Normalise per-row for better dynamic range visualisation
+    vmax = intensity_2d.max()
+    im = ax.pcolormesh(x_um, y_um, intensity_2d / (vmax + 1e-30),
+                       cmap="inferno", shading="auto", vmin=0, vmax=1)
+    plt.colorbar(im, ax=ax, label="Normalised |Ez|²")
+
+    # Mark focal plane
+    y_focal = y_pillar_top + focal_len
+    ax.axhline(y_focal, color="cyan", ls="--", lw=1.2,
+               label=f"Focal plane  (f = {focal_len:.1f} μm)")
+    ax.axhline(y_pillar_top, color="white", ls=":", lw=0.8,
+               label="Pillar top")
+
+    ax.set_xlabel("x (μm)")
+    ax.set_ylabel("y (μm)")
+    ax.set_title("Metalens beam propagation  |  |Ez|²")
+    ax.legend(loc="upper right", fontsize=8)
+
+    plt.tight_layout()
+    plt.savefig(filename, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"[viz] Saved: {filename}")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Pillar layout visualisation
+# ──────────────────────────────────────────────────────────────────────────────
+
 def plot_pillar_layout(x_positions, widths, pillar_height, period,
                        target_phases, filename):
     """
