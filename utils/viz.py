@@ -230,6 +230,64 @@ def plot_focal_spot(x_um, intensity, fwhm_um, diffraction_limit_um,
     print(f"[viz] Saved: {filename}")
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Hologram plots
+# ──────────────────────────────────────────────────────────────────────────────
+
+def plot_hologram_comparison(theta_deg, intensity, target_angles_deg,
+                             hologram_phases, x_positions,
+                             wavelength, filename):
+    """
+    Two-panel plot comparing the simulated hologram farfield to the target.
+
+    Parameters
+    ----------
+    theta_deg        : array  angles in degrees from MEEP simulation
+    intensity        : array  |Ez|² at each angle
+    target_angles_deg: list   target spot angles in degrees
+    hologram_phases  : array  GS-designed phase at each pillar (radians)
+    x_positions      : array  pillar x-coordinates in μm
+    wavelength       : float  free-space wavelength in μm
+    filename         : str    output PNG path
+    """
+    _ensure_dir(filename)
+    norm = intensity / intensity.max() if intensity.max() > 0 else intensity
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+    fig.suptitle(
+        f"Metasurface Hologram  |  λ = {wavelength*1000:.0f} nm  "
+        f"|  targets: {[f'{a:.0f}°' for a in target_angles_deg]}"
+    )
+
+    # Farfield comparison
+    ax1.plot(theta_deg, norm, "b-", lw=1.5, label="FDTD (MEEP)")
+    colors = plt.cm.Set1(np.linspace(0, 0.8, len(target_angles_deg)))
+    for ang, col in zip(target_angles_deg, colors):
+        ax1.axvline(ang, color=col, ls="--", lw=1.3, label=f"Target {ang:.0f}°")
+    ax1.set_xlabel("Angle (degrees)")
+    ax1.set_ylabel("Normalised intensity")
+    ax1.set_xlim(-90, 90)
+    ax1.set_ylim(0, 1.05)
+    ax1.legend(fontsize=8)
+    ax1.grid(True, alpha=0.3)
+    ax1.set_title("Farfield (simulated vs targets)")
+
+    # Hologram phase profile
+    ax2.bar(x_positions, np.degrees(hologram_phases % (2 * np.pi)),
+            width=(x_positions[1] - x_positions[0]) * 0.85,
+            color="steelblue", alpha=0.75)
+    ax2.set_xlabel("x (μm)")
+    ax2.set_ylabel("Assigned phase (°)")
+    ax2.set_ylim(0, 370)
+    ax2.grid(True, alpha=0.3)
+    ax2.set_title("Hologram phase profile (GS design)")
+
+    plt.tight_layout()
+    plt.savefig(filename, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"[viz] Saved: {filename}")
+
+
 def plot_field_propagation(x_um, y_um, intensity_2d,
                            focal_len, y_pillar_top, filename):
     """

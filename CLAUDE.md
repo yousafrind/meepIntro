@@ -19,7 +19,8 @@ Phase 4: Surrogate-model optimisation (PyTorch / ROCm)
 **Current status:** Phase 1 in progress.
 - `01_beam_steering/` — complete (unit cell sweep + full array sim)
 - `02_metalens/` — complete (metalens phase profile + MEEP FDTD + ASM focal spot analysis)
-- `03_holography/`, `04_absorption/` — not yet started
+- `03_holography/` — complete (Gerchberg-Saxton phase retrieval + MEEP FDTD validation)
+- `04_absorption/` — not yet started
 
 ---
 
@@ -123,6 +124,40 @@ Output: `results/epsilon_map.png`, `results/metalens_layout.png`,
 
 ---
 
+## 03_holography
+
+**Workflow** (reuses phase library from 01_beam_steering):
+
+```
+01_beam_steering/results/phase_library.npz  →  hologram_sim.py
+```
+
+**hologram_sim.py** — Gerchberg-Saxton (GS) iterative phase retrieval computes
+the hologram phase profile that reconstructs target farfield spots. Assigns
+pillar widths, runs MEEP, compares simulated farfield to GS target.
+Output: `results/epsilon_map.png`, `results/hologram_layout.png`,
+        `results/hologram_comparison.png`, `results/hologram.npz`
+
+**Key parameters:**
+
+| Parameter | Default | Note |
+|-----------|---------|------|
+| `WAVELENGTH` | 0.532 μm | Free-space wavelength |
+| `HOLO_WIDTH` | 10.0 μm | Hologram aperture (40 pillars at period=250 nm) |
+| `TARGET_ANGLES` | -30°, +30° | Farfield target spot angles (space-separated) |
+| `N_GS` | 100 | GS iterations |
+| `PILLAR_H` | 0.60 μm | Must match unit_cell_sweep |
+| `RESOLUTION` | 32 px/μm | 32=fast preview, 64=accurate |
+
+```bash
+# Custom target angles
+python run.py 03_holography/hologram_sim.py --target-angles -45 0 45
+```
+
+**Expected results**: GS efficiency ~40–50%; MEEP combined spot efficiency ~25–45%.
+
+---
+
 ## Utils modules
 
 ### `utils/materials.py`
@@ -155,6 +190,7 @@ Key functions:
 - `plot_pillar_layout(...)` — geometry + phase profile
 - `plot_focal_spot(...)` — |Ez|² at focal plane with FWHM annotation
 - `plot_field_propagation(...)` — 2D |Ez|² field map showing beam focusing
+- `plot_hologram_comparison(...)` — simulated farfield vs target markers + phase profile
 
 ---
 
@@ -198,6 +234,6 @@ pip install torch --index-url https://download.pytorch.org/whl/rocm6.0
 
 - [x] `01_beam_steering/` — done
 - [x] `02_metalens/` — done
-- [ ] `03_holography/` — complex amplitude encoding, farfield hologram
+- [x] `03_holography/` — done
 - [ ] `04_absorption/` — transmission spectra, harminv for resonance finding
 - [ ] Phase 2: benchmark resolution/symmetry/MPI scaling on 01_beam_steering
