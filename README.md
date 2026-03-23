@@ -12,7 +12,7 @@ Structured introduction to electromagnetic metasurface simulation and optimisati
 
 | Phase | Goal | Status |
 |-------|------|--------|
-| 1 | MEEP fundamentals — 4 metasurface examples | 🔄 in progress |
+| 1 | MEEP fundamentals — 4 metasurface examples | 🔄 in progress (3/4 done) |
 | 2 | Speed up base sims (resolution, symmetry, MPI) | planned |
 | 3 | Solver comparison: FDTD vs RCWA vs torcwa | planned |
 | 4 | Surrogate-model optimisation (GPU inference) | planned |
@@ -21,12 +21,12 @@ Structured introduction to electromagnetic metasurface simulation and optimisati
 
 ## Phase 1 Examples
 
-| Folder | Physics | Key MEEP concepts |
-|--------|---------|-------------------|
-| `01_beam_steering/` | Phase-gradient metasurface | Bloch BCs, phase library, angular spectrum |
-| `02_metalens/` | Focusing / metalens | Near-to-far field, focal spot |
-| `03_holography/` | Farfield hologram | Complex amplitude encoding |
-| `04_absorption/` | Resonant absorber / filter | Transmission spectra, harminv |
+| Folder | Physics | Key MEEP concepts | Status |
+|--------|---------|-------------------|--------|
+| `01_beam_steering/` | Phase-gradient metasurface | Bloch BCs, phase library, angular spectrum | ✅ done |
+| `02_metalens/` | Focusing / flat metalens | Near-to-far (ASM), focal spot | ✅ done |
+| `03_holography/` | Farfield hologram (GS phase retrieval) | Iterative design, farfield FFT | ✅ done |
+| `04_absorption/` | Resonant absorber / filter | Transmission spectra, harminv | planned |
 
 ---
 
@@ -48,12 +48,18 @@ launches under MPI if available:
 # Build phase library first (run once, ~20–60 min depending on resolution)
 python run.py 01_beam_steering/unit_cell_sweep.py
 
-# Then run the full metasurface simulation
+# -- or use the generic sweep engine with adaptive phase-step sampling --
+python run.py utils/sweep.py --phase-step 5 --outdir 01_beam_steering/results
+
+# Then run any metasurface simulation (all reuse the same library)
 python run.py 01_beam_steering/full_array_sim.py
+python run.py 02_metalens/metalens_sim.py
+python run.py 03_holography/hologram_sim.py --target-angles -30 30
 
 # Override parameters via CLI
 python run.py 01_beam_steering/full_array_sim.py --angle 45 --wavelength 0.633
-python run.py 01_beam_steering/full_array_sim.py --help
+python run.py 02_metalens/metalens_sim.py --focal-len 15 --lens-width 8
+python run.py 03_holography/hologram_sim.py --target-angles -45 0 45
 
 # Force fewer cores (e.g. for testing)
 MEEP_NPROCS=4 python run.py 01_beam_steering/unit_cell_sweep.py --n-widths 5 --resolution 32
@@ -112,21 +118,77 @@ meepIntro/
 │   ├── TiO2_rutile_Siefke2016.txt
 │   └── SiO2_Malitson1965.txt
 ├── utils/
+│   ├── sweep.py                    ← unit-cell sweep engine + PhaseLibrary
 │   ├── device.py                   ← CPU/GPU detection
 │   ├── materials.py                ← n,k loader → MEEP Medium
 │   └── viz.py                      ← shared plotting helpers
 ├── 01_beam_steering/               ← see 01_beam_steering/README.md
-│   ├── unit_cell_sweep.py          ← step 1: build phase library
+│   ├── unit_cell_sweep.py          ← step 1: build phase library (wraps utils/sweep.py)
 │   ├── full_array_sim.py           ← step 2: full metasurface FDTD
 │   └── results/                    ← auto-created: plots + data
-├── 02_metalens/                    ← (coming next)
-├── 03_holography/
-└── 04_absorption/
+├── 02_metalens/                    ← see 02_metalens/README.md
+│   ├── metalens_sim.py             ← quadratic phase + MEEP + ASM focal analysis
+│   └── results/
+├── 03_holography/                  ← see 03_holography/README.md
+│   ├── hologram_sim.py             ← GS phase retrieval + MEEP farfield validation
+│   └── results/
+└── 04_absorption/                  ← planned
 ```
 
 ---
 
 ## Utils API
+
+### `utils/sweep.py` — Unit-cell sweep engine
+
+The central sweep engine used by all Phase 1 simulations.  Runs a 2D FDTD
+parameter sweep over pillar widths, extracts complex transmission coefficients,
+and returns a **`PhaseLibrary`** object.
+
+```python
+from utils.sweep import sweep, PhaseLibrary, run_unit_cell
+
+# Build a library (runs MEEP)
+lib = sweep(
+    material="TiO2", wavelength=0.532, period=0.25, height=0.60,
+    n_glass=1.5, resolution=64,
+    n_widths=50,         # fixed number of samples, OR:
+    phase_step=5.0,      # adaptive — auto-sets n_widths for ≤ 5° spacing
+)
+lib.save("results/phase_library.npz")
+
+# Load an existing library
+lib = PhaseLibrary.load("results/phase_library.npz")
+
+# Nearest-neighbour phase → width lookup
+widths, errors = lib.assign_widths(target_phases_rad)
+
+# Metadata
+lib.phase_coverage()              # total phase range in degrees
+lib.period, lib.wavelength        # geometry parameters
+
+# Dict-style access (backward compatible with raw np.load output)
+lib["widths"], lib["phases"], lib["period"], lib["material"]
+```
+
+Can also be run directly as a script:
+```bash
+# Generic sweep (outputs to any directory)
+python run.py utils/sweep.py --outdir 01_beam_steering/results
+
+# Adaptive mode: guarantee ≤ 5° phase steps
+python run.py utils/sweep.py --phase-step 5 --outdir 01_beam_steering/results
+
+# Different material / geometry
+python run.py utils/sweep.py --material SiO2 --height 0.80 --period 0.30
+```
+
+**`--phase-step DEG`** mode: runs a fast 15-point coarse sweep first to
+estimate the geometry's phase coverage, then computes the number of samples
+needed before running the full sweep — no manual tuning of `--n-widths`
+required.
+
+---
 
 ### `utils/materials.py` — Material loader
 
@@ -178,6 +240,9 @@ needed, works in WSL/headless).
 | `plot_fields(sim, component, filename)` | 2D MEEP near-field snapshot |
 | `plot_epsilon(sim, filename)` | Permittivity cross-section |
 | `plot_pillar_layout(x_positions, widths, ...)` | Pillar geometry + phase profile |
+| `plot_focal_spot(x, intensity, ...)` | |Ez|² at focal plane with FWHM annotation |
+| `plot_field_propagation(x_um, y_um, intensity_2d, ...)` | 2D |Ez|² propagation map |
+| `plot_hologram_comparison(theta, intensity, targets, ...)` | Farfield vs target markers + phase profile |
 
 Output directories are created automatically.
 
