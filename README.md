@@ -12,7 +12,7 @@ Structured introduction to electromagnetic metasurface simulation and optimisati
 
 | Phase | Goal | Status |
 |-------|------|--------|
-| 1 | MEEP fundamentals — 4 metasurface examples | 🔄 in progress (3/4 done) |
+| 1 | MEEP fundamentals — 4 metasurface examples | ✅ complete |
 | 2 | Speed up base sims (resolution, symmetry, MPI) | planned |
 | 3 | Solver comparison: FDTD vs RCWA vs torcwa | planned |
 | 4 | Surrogate-model optimisation (GPU inference) | planned |
@@ -26,7 +26,7 @@ Structured introduction to electromagnetic metasurface simulation and optimisati
 | `01_beam_steering/` | Phase-gradient metasurface | Bloch BCs, phase library, angular spectrum | ✅ done |
 | `02_metalens/` | Focusing / flat metalens | Near-to-far (ASM), focal spot | ✅ done |
 | `03_holography/` | Farfield hologram (GS phase retrieval) | Iterative design, farfield FFT | ✅ done |
-| `04_absorption/` | Resonant absorber / filter | Transmission spectra, harminv | planned |
+| `04_absorption/` | Resonant absorber / filter | Broadband DFT flux, harminv Q | ✅ done |
 
 ---
 
@@ -60,6 +60,10 @@ python run.py 03_holography/hologram_sim.py --target-angles -30 30
 python run.py 01_beam_steering/full_array_sim.py --angle 45 --wavelength 0.633
 python run.py 02_metalens/metalens_sim.py --focal-len 15 --lens-width 8
 python run.py 03_holography/hologram_sim.py --target-angles -45 0 45
+
+# 04_absorption — standalone (no phase library needed)
+python run.py 04_absorption/absorption_sim.py
+python run.py 04_absorption/absorption_sim.py --resolution 64 --period 0.40
 
 # Force fewer cores (e.g. for testing)
 MEEP_NPROCS=4 python run.py 01_beam_steering/unit_cell_sweep.py --n-widths 5 --resolution 32
@@ -132,7 +136,11 @@ meepIntro/
 ├── 03_holography/                  ← see 03_holography/README.md
 │   ├── hologram_sim.py             ← GS phase retrieval + MEEP farfield validation
 │   └── results/
-└── 04_absorption/                  ← planned
+├── 04_absorption/                  ← see 04_absorption/README.md
+│   ├── absorption_sim.py           ← broadband T/R/A spectrum + harminv Q
+│   └── results/
+└── envs/
+    └── meep_env.yml
 ```
 
 ---
@@ -243,6 +251,7 @@ needed, works in WSL/headless).
 | `plot_focal_spot(x, intensity, ...)` | |Ez|² at focal plane with FWHM annotation |
 | `plot_field_propagation(x_um, y_um, intensity_2d, ...)` | 2D |Ez|² propagation map |
 | `plot_hologram_comparison(theta, intensity, targets, ...)` | Farfield vs target markers + phase profile |
+| `plot_absorption_spectrum(wavelengths_nm, T, R, A, ...)` | 3-panel T / R / A spectrum with harminv resonance markers |
 
 Output directories are created automatically.
 

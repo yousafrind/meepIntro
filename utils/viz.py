@@ -386,3 +386,59 @@ def plot_pillar_layout(x_positions, widths, pillar_height, period,
     plt.savefig(filename, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"[viz] Saved: {filename}")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Absorption spectrum + resonance markers
+# ──────────────────────────────────────────────────────────────────────────────
+
+def plot_absorption_spectrum(wavelengths_nm, T, R, A,
+                             resonances=None, filename="results/spectrum.png"):
+    """
+    Three-panel transmission / reflection / absorption spectrum.
+
+    Parameters
+    ----------
+    wavelengths_nm : array   wavelengths in nm
+    T              : array   transmission (0–1)
+    R              : array   reflection   (0–1)
+    A              : array   absorption = 1 − T − R
+    resonances     : list of dicts with keys:
+                       'wavelength_nm' : float  resonance wavelength
+                       'Q'             : float  quality factor (optional)
+                       'label'         : str    text label    (optional)
+                     Pass None to skip resonance markers.
+    filename       : str    output PNG path
+    """
+    _ensure_dir(filename)
+    fig, axes = plt.subplots(3, 1, figsize=(9, 10), sharex=True)
+    fig.suptitle("Resonant metasurface — Transmission / Reflection / Absorption")
+
+    panels = [
+        (axes[0], T, "Transmission", "tab:blue"),
+        (axes[1], R, "Reflection",   "tab:orange"),
+        (axes[2], A, "Absorption",   "tab:red"),
+    ]
+
+    for ax, vals, label, color in panels:
+        ax.plot(wavelengths_nm, vals, color=color, lw=1.5)
+        ax.set_ylabel(label)
+        ax.set_ylim(-0.02, 1.05)
+        ax.grid(True, alpha=0.3)
+        ax.axhline(0, color="k", lw=0.5, ls=":")
+
+        if resonances:
+            for res in resonances:
+                wl  = res["wavelength_nm"]
+                q   = res.get("Q", None)
+                lbl = res.get("label", f"Q={q:.0f}" if q else f"{wl:.0f} nm")
+                ax.axvline(wl, color="green", ls="--", lw=1.1, alpha=0.8)
+                if ax is axes[0]:
+                    ax.text(wl + 3, 0.55, lbl,
+                            color="green", fontsize=8, rotation=90, va="center")
+
+    axes[2].set_xlabel("Wavelength (nm)")
+    plt.tight_layout()
+    plt.savefig(filename, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"[viz] Saved: {filename}")
