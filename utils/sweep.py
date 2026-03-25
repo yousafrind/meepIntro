@@ -252,7 +252,8 @@ class PhaseLibrary:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def run_unit_cell(pillar_width, period, pillar_height,
-                  wavelength, pillar_medium, n_glass, resolution):
+                  wavelength, pillar_medium, n_glass, resolution,
+                  use_symmetry=False):
     """
     2D FDTD simulation of one unit cell at normal incidence (TM, k=0).
 
@@ -279,6 +280,9 @@ def run_unit_cell(pillar_width, period, pillar_height,
     pillar_medium : mp.Medium
     n_glass       : float   substrate refractive index
     resolution    : int     MEEP pixels per μm
+    use_symmetry  : bool    exploit Mirror(X) symmetry of the unit cell
+                            (pillar centred at x=0, normal-incidence plane wave).
+                            Halves the x grid → ~2× speedup.  Default False.
 
     Returns
     -------
@@ -327,6 +331,9 @@ def run_unit_cell(pillar_width, period, pillar_height,
         )
     ]
 
+    # Mirror(X) is valid: pillar centred at x=0, source uniform in x, Ez even
+    symmetries = [mp.Mirror(mp.X)] if use_symmetry else []
+
     sim = mp.Simulation(
         cell_size=mp.Vector3(sx, sy),
         boundary_layers=[mp.PML(dpml)],
@@ -334,6 +341,7 @@ def run_unit_cell(pillar_width, period, pillar_height,
         sources=sources,
         k_point=mp.Vector3(),
         resolution=resolution,
+        symmetries=symmetries,
         eps_averaging=True,
     )
 
@@ -357,7 +365,8 @@ def run_unit_cell(pillar_width, period, pillar_height,
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _run_raw_sweep(widths, period, pillar_height,
-                   wavelength, pillar_medium, n_glass, resolution):
+                   wavelength, pillar_medium, n_glass, resolution,
+                   use_symmetry=False):
     """
     Inner sweep loop.  Returns (phases, amplitudes) for the given widths.
     Also runs a no-pillar reference first.
@@ -375,6 +384,7 @@ def _run_raw_sweep(widths, period, pillar_height,
         period=period, pillar_height=pillar_height,
         wavelength=wavelength, pillar_medium=pillar_medium,
         n_glass=n_glass, resolution=resolution,
+        use_symmetry=use_symmetry,
     )
     if mp.am_master():
         print(f"[sweep] |E_ref| = {abs(ez_ref):.4f}")
@@ -387,6 +397,7 @@ def _run_raw_sweep(widths, period, pillar_height,
             period=period, pillar_height=pillar_height,
             wavelength=wavelength, pillar_medium=pillar_medium,
             n_glass=n_glass, resolution=resolution,
+            use_symmetry=use_symmetry,
         )
         T = ez / ez_ref
         phases[i]     = np.angle(T)
@@ -412,7 +423,8 @@ def _estimate_n_widths_for_phase_step(phase_step_deg,
 
 def sweep(material, wavelength=0.532, period=0.25, height=0.60,
           n_glass=1.5, resolution=64, n_widths=50, phase_step=None,
-          width_min_frac=0.05, width_max_frac=0.90, verbose=True):
+          width_min_frac=0.05, width_max_frac=0.90, use_symmetry=False,
+          verbose=True):
     """
     Run a unit-cell phase library sweep.
 
@@ -430,6 +442,8 @@ def sweep(material, wavelength=0.532, period=0.25, height=0.60,
                              pre-sweep to estimate the required n_widths
     width_min_frac : float   min width / period  (default 0.05)
     width_max_frac : float   max width / period  (default 0.90)
+    use_symmetry   : bool    apply Mirror(X) symmetry to each unit-cell sim
+                             (~2× speedup; valid for centred pillar, k=0).
     verbose        : bool    print progress
 
     Returns
@@ -473,6 +487,7 @@ def sweep(material, wavelength=0.532, period=0.25, height=0.60,
         ph_coarse, _   = _run_raw_sweep(
             w_coarse, period, height, wavelength,
             pillar_medium, n_glass, resolution,
+            use_symmetry=use_symmetry,
         )
         n_widths = _estimate_n_widths_for_phase_step(phase_step, ph_coarse)
         if master and verbose:
@@ -490,6 +505,7 @@ def sweep(material, wavelength=0.532, period=0.25, height=0.60,
     phases, amplitudes = _run_raw_sweep(
         widths, period, height, wavelength,
         pillar_medium, n_glass, resolution,
+        use_symmetry=use_symmetry,
     )
 
     lib = PhaseLibrary(
@@ -545,6 +561,8 @@ def _parse_args():
     p.add_argument("--width-max",  type=float, default=0.90,
                    dest="width_max_frac",
                    help="Max pillar width as fraction of period")
+    p.add_argument("--symmetry",   action="store_true", default=False,
+                   help="Use Mirror(X) symmetry (~2× speedup for centred pillar)")
     p.add_argument("--outdir",     default=".",
                    help="Output directory for phase_library.npz and plot")
     p.add_argument("--no-plot",    action="store_true", dest="no_plot",
@@ -577,6 +595,7 @@ def main():
         phase_step    = args.phase_step,
         width_min_frac= args.width_min_frac,
         width_max_frac= args.width_max_frac,
+        use_symmetry  = args.symmetry,
     )
 
     if master:

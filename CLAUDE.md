@@ -16,11 +16,12 @@ Phase 3: Solver comparison — FDTD (MEEP) vs RCWA vs torcwa (GPU)
 Phase 4: Surrogate-model optimisation (PyTorch / ROCm)
 ```
 
-**Current status:** Phase 1 complete — all 4 examples done.
+**Current status:** Phase 1 complete. Phase 2 in progress.
 - `01_beam_steering/` — complete (unit cell sweep + full array sim)
 - `02_metalens/` — complete (metalens phase profile + MEEP FDTD + ASM focal spot analysis)
 - `03_holography/` — complete (Gerchberg-Saxton phase retrieval + MEEP FDTD validation)
 - `04_absorption/` — complete (broadband T/R/A spectra + harminv Q-factor extraction)
+- `benchmarks/` — Phase 2: resolution / symmetry / MPI scaling benchmarks
 
 ---
 
@@ -202,6 +203,42 @@ Q = 10–100 for Mie, 100–1000 for GMR.
 
 ---
 
+## Phase 2 — benchmarks/
+
+### `benchmarks/benchmark.py`
+Drives three performance benchmarks and reports wall-time tables + plots.
+
+```bash
+python run.py benchmarks/benchmark.py                # all three benchmarks
+python run.py benchmarks/benchmark.py --mode resolution
+python run.py benchmarks/benchmark.py --mode symmetry
+python run.py benchmarks/benchmark.py --mode mpi --max-procs 8
+python run.py benchmarks/benchmark.py --quick        # smoke-test in < 1 min
+```
+
+| Benchmark | What it measures |
+|-----------|-----------------|
+| `resolution` | Wall time at res=16/32/64/128; compares to O(r³) theory |
+| `symmetry` | Mirror(X) speedup (~2×) vs no-symmetry at fixed resolution |
+| `mpi` | Strong scaling speedup and parallel efficiency vs nprocs |
+
+Output: `benchmarks/results/benchmark.png`, `benchmark_report.txt`, `benchmark.json`
+
+**Mirror(X) symmetry** is now exposed in `utils/sweep.py`:
+
+```bash
+# Use symmetry in any sweep (halves x grid, ~2× speedup, valid for k=0)
+python run.py utils/sweep.py --symmetry --resolution 64
+```
+
+Or in Python:
+```python
+from utils.sweep import sweep
+lib = sweep(..., use_symmetry=True)
+```
+
+---
+
 ## Utils modules
 
 ### `utils/sweep.py`
@@ -313,10 +350,15 @@ pip install torch --index-url https://download.pytorch.org/whl/rocm6.0
 
 ---
 
-## What's next (Phase 1 remaining work)
+## What's next
 
+**Phase 1 — complete**
 - [x] `01_beam_steering/` — done
 - [x] `02_metalens/` — done
 - [x] `03_holography/` — done
 - [x] `04_absorption/` — done (broadband T/R/A + harminv Q-factor extraction)
-- [ ] Phase 2: benchmark resolution/symmetry/MPI scaling on 01_beam_steering
+
+**Phase 2 — in progress**
+- [x] `benchmarks/benchmark.py` — resolution / Mirror(X) symmetry / MPI scaling
+- [ ] Apply results: tune resolution + symmetry defaults in production scripts
+- [ ] Phase 3: RCWA solver comparison (torcwa)

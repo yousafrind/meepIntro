@@ -13,7 +13,7 @@ Structured introduction to electromagnetic metasurface simulation and optimisati
 | Phase | Goal | Status |
 |-------|------|--------|
 | 1 | MEEP fundamentals — 4 metasurface examples | ✅ complete |
-| 2 | Speed up base sims (resolution, symmetry, MPI) | planned |
+| 2 | Speed up base sims (resolution, symmetry, MPI) | 🔄 in progress |
 | 3 | Solver comparison: FDTD vs RCWA vs torcwa | planned |
 | 4 | Surrogate-model optimisation (GPU inference) | planned |
 
@@ -27,6 +27,37 @@ Structured introduction to electromagnetic metasurface simulation and optimisati
 | `02_metalens/` | Focusing / flat metalens | Near-to-far (ASM), focal spot | ✅ done |
 | `03_holography/` | Farfield hologram (GS phase retrieval) | Iterative design, farfield FFT | ✅ done |
 | `04_absorption/` | Resonant absorber / filter | Broadband DFT flux, harminv Q | ✅ done |
+
+---
+
+## Phase 2 — Benchmarks
+
+```bash
+# Full benchmark suite
+python run.py benchmarks/benchmark.py
+
+# Quick smoke-test (< 1 min)
+python run.py benchmarks/benchmark.py --quick
+
+# Individual benchmarks
+python run.py benchmarks/benchmark.py --mode resolution --resolutions 16 32 64
+python run.py benchmarks/benchmark.py --mode symmetry
+python run.py benchmarks/benchmark.py --mode mpi --max-procs 8
+```
+
+| Benchmark | Output |
+|-----------|--------|
+| Resolution | Wall time vs px/μm + O(r³) reference |
+| Symmetry | Mirror(X) vs no-symmetry speedup bar chart |
+| MPI | Speedup + parallel efficiency vs nprocs |
+
+Results → `benchmarks/results/` (PNG plot + text report + JSON).
+
+**Mirror(X) symmetry** is now a flag on all unit-cell sweeps:
+```bash
+python run.py utils/sweep.py --symmetry --resolution 64 \
+    --outdir 01_beam_steering/results
+```
 
 ---
 
@@ -138,6 +169,9 @@ meepIntro/
 │   └── results/
 ├── 04_absorption/                  ← see 04_absorption/README.md
 │   ├── absorption_sim.py           ← broadband T/R/A spectrum + harminv Q
+│   └── results/
+├── benchmarks/                     ← Phase 2: see benchmarks/README.md
+│   ├── benchmark.py                ← resolution / symmetry / MPI benchmarks
 │   └── results/
 └── envs/
     └── meep_env.yml
