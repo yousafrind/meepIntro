@@ -16,13 +16,14 @@ Phase 3: Solver comparison — FDTD (MEEP) vs RCWA vs torcwa (GPU)
 Phase 4: Surrogate-model optimisation (PyTorch / ROCm)
 ```
 
-**Current status:** Phase 1 complete. Phase 2 complete. Phase 3 complete.
+**Current status:** Phase 1 complete. Phase 2 complete. Phase 3 complete. Phase 4 complete.
 - `01_beam_steering/` — complete (unit cell sweep + full array sim)
 - `02_metalens/` — complete (metalens phase profile + MEEP FDTD + ASM focal spot analysis)
 - `03_holography/` — complete (Gerchberg-Saxton phase retrieval + MEEP FDTD validation)
 - `04_absorption/` — complete (broadband T/R/A spectra + harminv Q-factor extraction)
 - `benchmarks/` — Phase 2: resolution / symmetry / MPI scaling benchmarks
 - `05_solver_comparison/` — Phase 3: torcwa RCWA sweep + MEEP vs RCWA overlay
+- `06_surrogate/` — Phase 4: MLP surrogate training + gradient-based inverse design
 
 ---
 
@@ -384,6 +385,56 @@ resonance features) is identical; only the absolute reference differs.
 
 ---
 
+## Phase 4 — 06_surrogate/
+
+### Workflow
+
+```bash
+# Step 1: train surrogate on phase library (MEEP or RCWA)
+python run.py 06_surrogate/train.py \
+    --libs 01_beam_steering/results/phase_library.npz
+
+# Faster: use RCWA library (seconds to generate vs hours for MEEP)
+python run.py 06_surrogate/train.py \
+    --libs 05_solver_comparison/results/rcwa_phase_library.npz
+
+# Step 2: gradient-based inverse design
+python run.py 06_surrogate/optimise.py --target beam --angle 30
+python run.py 06_surrogate/optimise.py --target metalens --focal-len 10
+```
+
+### `train.py`
+Trains a small MLP surrogate: `w/period → (|T|, sin∠T, cos∠T)`.
+
+- sin/cos encoding avoids phase-wrapping discontinuity at ±π
+- |T| output bounded to (0,1) by sigmoid activation
+- Data augmentation: Gaussian noise on width inputs (σ = 5% of normalised std)
+- Adam + cosine annealing LR; early stopping on validation MSE
+- Saves `surrogate_model.pt` (state dict + normalisation stats)
+
+Key parameters:
+
+| Parameter | Default | Note |
+|-----------|---------|------|
+| `--hidden` | 64 | Hidden layer width |
+| `--layers` | 3  | Number of hidden layers |
+| `--epochs` | 1000 | Training epochs |
+| `--augment`| 20 | Noise copies per data point |
+
+Output: `results/surrogate_model.pt`, `results/training_curves.png`
+
+### `optimise.py`
+Gradient-based inverse design through the differentiable surrogate.
+
+- Pillar widths parameterised via sigmoid reparametrisation → bounds always respected
+- Loss: circular phase MSE + amplitude regularisation (`1 − |T|`)²
+- Compares result vs nearest-neighbour PhaseLibrary baseline
+- Supports beam steering (`--target beam --angle θ`) and metalens (`--target metalens --focal-len f`)
+
+Output: `results/optimised_design.npz`, `results/optimised_design.png`
+
+---
+
 ## Conventions
 
 - All lengths in **micrometres (μm)** throughout — MEEP natural units with c=1
@@ -412,5 +463,7 @@ resonance features) is identical; only the absolute reference differs.
 - [x] `05_solver_comparison/compare_solvers.py` — |T|/∠T overlay + speed table
 - [x] `utils/viz.py` — `plot_solver_comparison()` added
 
-**Phase 4 — planned**
-- [ ] Surrogate-model optimisation (PyTorch / ROCm)
+**Phase 4 — complete**
+- [x] `06_surrogate/train.py` — MLP surrogate trained on PhaseLibrary data
+- [x] `06_surrogate/optimise.py` — gradient-based inverse design via surrogate
+- [x] `utils/viz.py` — `plot_surrogate_training()` and `plot_optimised_design()` added

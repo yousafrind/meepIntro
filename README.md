@@ -15,7 +15,7 @@ Structured introduction to electromagnetic metasurface simulation and optimisati
 | 1 | MEEP fundamentals — 4 metasurface examples | ✅ complete |
 | 2 | Speed up base sims (resolution, symmetry, MPI) | ✅ complete |
 | 3 | Solver comparison: FDTD vs RCWA vs torcwa | ✅ complete |
-| 4 | Surrogate-model optimisation (GPU inference) | planned |
+| 4 | Surrogate-model optimisation (GPU inference) | ✅ complete |
 
 ---
 
@@ -97,6 +97,40 @@ Output → `05_solver_comparison/results/`:
 pip install torcwa
 ```
 GPU (ROCm/CUDA) acceleration is automatic when PyTorch detects a GPU.
+
+---
+
+## Phase 4 — Surrogate-Model Optimisation
+
+`06_surrogate/` trains a differentiable MLP surrogate on phase library data,
+then uses gradient descent through the surrogate for fast inverse design of
+pillar width profiles — no FDTD or RCWA calls during optimisation.
+
+```bash
+# Step 1: train surrogate (uses phase library from 01_beam_steering or RCWA)
+python run.py 06_surrogate/train.py \
+    --libs 01_beam_steering/results/phase_library.npz
+
+# Or train on RCWA data (faster to generate)
+python run.py 06_surrogate/train.py \
+    --libs 05_solver_comparison/results/rcwa_phase_library.npz
+
+# Step 2: gradient-based inverse design
+python run.py 06_surrogate/optimise.py --target beam --angle 30
+python run.py 06_surrogate/optimise.py --target metalens --focal-len 10
+```
+
+| Script | What it does |
+|--------|-------------|
+| `train.py` | MLP: `w/period → (|T|, sin∠T, cos∠T)`. Adam + cosine LR. Saves `surrogate_model.pt` |
+| `optimise.py` | Gradient descent on pillar widths; compares to NN-baseline from PhaseLibrary |
+
+Output → `06_surrogate/results/`:
+- `surrogate_model.pt` — model weights + normalisation stats
+- `training_curves.png` — loss curves + |T| and ∠T parity plots
+- `optimised_design.png` — phase profile / widths / amplitudes / convergence
+
+**ROCm/CUDA**: `get_torch_device()` auto-detects GPU. Falls back to CPU silently.
 
 ---
 
@@ -216,6 +250,10 @@ meepIntro/
 │   ├── rcwa_sim.py                 ← torcwa RCWA sweep → PhaseLibrary
 │   ├── compare_solvers.py          ← overlay plot + speed table
 │   └── results/
+├── 06_surrogate/                   ← Phase 4: surrogate + inverse design
+│   ├── train.py                    ← train MLP on PhaseLibrary data
+│   ├── optimise.py                 ← gradient-based pillar width optimisation
+│   └── results/
 └── envs/
     └── meep_env.yml
 ```
@@ -330,6 +368,8 @@ needed, works in WSL/headless).
 | `plot_hologram_comparison(theta, intensity, targets, ...)` | Farfield vs target markers + phase profile |
 | `plot_absorption_spectrum(wavelengths_nm, T, R, A, ...)` | 3-panel T / R / A spectrum with harminv resonance markers |
 | `plot_solver_comparison(widths_meep, ..., widths_rcwa, ...)` | MEEP vs RCWA overlay: |T| and ∠T side by side |
+| `plot_surrogate_training(train_losses, val_losses, pred_amp, ...)` | 3-panel: loss curves + |T| parity + ∠T parity |
+| `plot_optimised_design(x_um, target_phases, phases_opt, ...)` | 4-panel: phase profile, widths, amplitudes, convergence |
 
 Output directories are created automatically.
 
