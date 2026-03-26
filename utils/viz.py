@@ -799,3 +799,113 @@ def plot_optimised_design(
     plt.savefig(filename, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"[viz] Saved: {filename}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  Achromatic design summary (Phase 5)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def plot_achromatic_design(
+    x_um, wavelengths,
+    target_phases, phases_per_wl, phases_nn,
+    widths_opt, widths_nn,
+    amps_per_wl,
+    opt_losses, target_desc, filename,
+):
+    """
+    Summary plot for achromatic multi-wavelength inverse design.
+
+    Layout: one row per wavelength (phase columns) + one bottom row
+    for pillar widths, mean amplitude, and convergence curve.
+
+    Parameters
+    ----------
+    x_um          : array [N]         pillar x-positions in μm
+    wavelengths   : list of float     wavelengths in μm
+    target_phases : list of array     target phase per wavelength [N]
+    phases_per_wl : list of array     surrogate-predicted phase per wavelength [N]
+    phases_nn     : list of array     NN-baseline phase per wavelength [N]
+    widths_opt    : array [N]         achromatic optimised pillar widths in μm
+    widths_nn     : array [N]         NN-baseline pillar widths (central λ) in μm
+    amps_per_wl   : list of array     surrogate-predicted |T| per wavelength [N]
+    opt_losses    : list              total loss per gradient step
+    target_desc   : str               design description for title
+    filename      : str               output PNG path
+    """
+    _ensure_dir(filename)
+
+    n_wl    = len(wavelengths)
+    n_cols  = 2          # phase profile | amplitude
+    n_rows  = n_wl + 1   # one row per wavelength + bottom summary row
+
+    fig, axes = plt.subplots(n_rows, n_cols,
+                             figsize=(13, 4 * n_rows),
+                             squeeze=False)
+    fig.suptitle(f"Achromatic Design — {target_desc}", fontsize=13)
+
+    x_nm = np.asarray(x_um) * 1000
+
+    colours = plt.cm.tab10(np.linspace(0, 0.6, n_wl))
+
+    for row, (wl, phi_t, phi_p, phi_nn, amp, col) in enumerate(
+            zip(wavelengths, target_phases, phases_per_wl,
+                phases_nn, amps_per_wl, colours)):
+
+        wl_nm = int(round(wl * 1000))
+
+        # ── Phase profile ────────────────────────────────────────────────────
+        ax = axes[row][0]
+        ax.plot(x_nm, np.degrees(phi_t),  "k-",   lw=2,   label="Target")
+        ax.plot(x_nm, np.degrees(phi_p),  "-o",   color=col, ms=4, lw=1.5,
+                label="Achromatic opt.")
+        ax.plot(x_nm, np.degrees(phi_nn), "--s",  color="salmon", ms=3, lw=1.2,
+                label="NN baseline")
+        mae_opt = float(np.degrees(np.mean(np.abs(
+            np.angle(np.exp(1j * (phi_p - phi_t)))
+        ))))
+        mae_nn  = float(np.degrees(np.mean(np.abs(
+            np.angle(np.exp(1j * (phi_nn - phi_t)))
+        ))))
+        ax.set_title(f"λ = {wl_nm} nm  |  phase  "
+                     f"(MAE opt={mae_opt:.1f}°, NN={mae_nn:.1f}°)")
+        ax.set_ylabel("Phase (°)")
+        if row == n_wl - 1:
+            ax.set_xlabel("x (nm)")
+        ax.legend(fontsize=8)
+        ax.grid(True, alpha=0.3)
+
+        # ── Amplitude ────────────────────────────────────────────────────────
+        ax = axes[row][1]
+        ax.plot(x_nm, amp, "-o", color=col, ms=4, lw=1.5,
+                label=f"mean={amp.mean():.3f}")
+        ax.set_ylim(0, 1.05)
+        ax.set_title(f"λ = {wl_nm} nm  |  |T|")
+        ax.set_ylabel("|T|")
+        if row == n_wl - 1:
+            ax.set_xlabel("x (nm)")
+        ax.legend(fontsize=8)
+        ax.grid(True, alpha=0.3)
+
+    # ── Bottom row: pillar widths + convergence ───────────────────────────────
+    ax = axes[n_wl][0]
+    ax.step(x_nm, widths_opt * 1000, "b-",  lw=1.5, where="mid",
+            label="Achromatic opt.")
+    ax.step(x_nm, widths_nn  * 1000, "r--", lw=1.5, where="mid",
+            label="NN baseline (central λ)")
+    ax.set_xlabel("x (nm)")
+    ax.set_ylabel("Pillar width (nm)")
+    ax.set_title("Assigned pillar widths")
+    ax.legend(fontsize=9)
+    ax.grid(True, alpha=0.3)
+
+    ax = axes[n_wl][1]
+    ax.semilogy(np.arange(1, len(opt_losses) + 1), opt_losses, "b-", lw=1.5)
+    ax.set_xlabel("Gradient step")
+    ax.set_ylabel("Total loss (sum over λ)")
+    ax.set_title("Optimisation convergence")
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(filename, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"[viz] Saved: {filename}")

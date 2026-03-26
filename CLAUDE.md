@@ -14,9 +14,10 @@ Phase 1: MEEP FDTD fundamentals (4 metasurface examples)
 Phase 2: Performance — resolution tuning, symmetry, MPI scaling
 Phase 3: Solver comparison — FDTD (MEEP) vs RCWA vs torcwa (GPU)
 Phase 4: Surrogate-model optimisation (PyTorch / ROCm)
+Phase 5: Broadband / achromatic design — multi-wavelength surrogate
 ```
 
-**Current status:** Phase 1 complete. Phase 2 complete. Phase 3 complete. Phase 4 complete.
+**Current status:** Phase 1 complete. Phase 2 complete. Phase 3 complete. Phase 4 complete. Phase 5 complete.
 - `01_beam_steering/` — complete (unit cell sweep + full array sim)
 - `02_metalens/` — complete (metalens phase profile + MEEP FDTD + ASM focal spot analysis)
 - `03_holography/` — complete (Gerchberg-Saxton phase retrieval + MEEP FDTD validation)
@@ -24,6 +25,7 @@ Phase 4: Surrogate-model optimisation (PyTorch / ROCm)
 - `benchmarks/` — Phase 2: resolution / symmetry / MPI scaling benchmarks
 - `05_solver_comparison/` — Phase 3: torcwa RCWA sweep + MEEP vs RCWA overlay
 - `06_surrogate/` — Phase 4: MLP surrogate training + gradient-based inverse design
+- `07_broadband/` — Phase 5: multi-wavelength surrogate + achromatic metasurface design
 
 ---
 
@@ -435,6 +437,53 @@ Output: `results/optimised_design.npz`, `results/optimised_design.png`
 
 ---
 
+## Phase 5 — 07_broadband/
+
+### Workflow
+
+```bash
+# Step 1: generate multi-wavelength RCWA data + train (combined command)
+MEEP_NPROCS=1 python run.py 07_broadband/multiwl_train.py \
+    --wavelengths 0.45 0.532 0.633
+
+# Step 2: achromatic inverse design
+python run.py 07_broadband/achromatic_design.py --target metalens --focal-len 10
+python run.py 07_broadband/achromatic_design.py --target beam --angle 30
+
+# Use existing RCWA data (skip re-generation)
+python run.py 07_broadband/multiwl_train.py --skip-data
+```
+
+### `multiwl_train.py`
+Multi-wavelength surrogate: inputs are `[w/period, λ_norm]` so the model
+learns the geometry–wavelength–response surface jointly.
+
+- Auto-generates per-wavelength RCWA phase libraries (calls `rcwa_sim.rcwa_sweep`)
+- Same MLP architecture as Phase 4 but `n_in = 2`
+- Saves `multiwl_model.pt` with full normalisation stats and geometry metadata
+
+Key parameters:
+
+| Parameter | Default | Note |
+|-----------|---------|------|
+| `--wavelengths` | 0.45 0.532 0.633 | μm; any number supported |
+| `--n-widths` | 50 | Width samples per wavelength |
+| `--fourier-order` | 15 | RCWA truncation order |
+
+Output: `results/multiwl_model.pt`, `results/multiwl_training.png`,
+`results/wl_<NNN>nm_library.npz` (one per wavelength)
+
+### `achromatic_design.py`
+Jointly minimises phase error across all wavelengths with one shared set of
+pillar widths.  The total loss is summed over wavelengths — impossible to
+minimise with nearest-neighbour lookup but natural for gradient descent.
+
+Compares against per-wavelength NN baselines to quantify the achromatic benefit.
+
+Output: `results/achromatic_design.npz`, `results/achromatic_design.png`
+
+---
+
 ## Conventions
 
 - All lengths in **micrometres (μm)** throughout — MEEP natural units with c=1
@@ -467,3 +516,8 @@ Output: `results/optimised_design.npz`, `results/optimised_design.png`
 - [x] `06_surrogate/train.py` — MLP surrogate trained on PhaseLibrary data
 - [x] `06_surrogate/optimise.py` — gradient-based inverse design via surrogate
 - [x] `utils/viz.py` — `plot_surrogate_training()` and `plot_optimised_design()` added
+
+**Phase 5 — complete**
+- [x] `07_broadband/multiwl_train.py` — multi-wavelength MLP: [w/period, λ] → (|T|, sin∠T, cos∠T)
+- [x] `07_broadband/achromatic_design.py` — joint gradient optimisation across multiple λ
+- [x] `utils/viz.py` — `plot_achromatic_design()` added
