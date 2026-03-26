@@ -628,3 +628,174 @@ def plot_solver_comparison(
     plt.savefig(filename, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"[viz] Saved: {filename}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  Surrogate training diagnostics (Phase 4)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def plot_surrogate_training(
+    train_losses, val_losses,
+    pred_amp, true_amp,
+    pred_phase, true_phase,
+    filename,
+):
+    """
+    Three-panel diagnostic for surrogate training.
+
+    Panel 1: train/val loss vs epoch (log scale)
+    Panel 2: parity plot for |T|  (predicted vs actual)
+    Panel 3: parity plot for ∠T  (predicted vs actual, degrees)
+
+    Parameters
+    ----------
+    train_losses : list   MSE loss per epoch (training set)
+    val_losses   : list   MSE loss per epoch (validation set)
+    pred_amp     : array  surrogate-predicted |T| on training data
+    true_amp     : array  ground-truth |T|
+    pred_phase   : array  surrogate-predicted ∠T in radians
+    true_phase   : array  ground-truth ∠T in radians
+    filename     : str    output PNG path
+    """
+    _ensure_dir(filename)
+
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    fig.suptitle("Surrogate MLP — Training Diagnostics", fontsize=13)
+
+    # ── Loss curves ────────────────────────────────────────────────────────
+    ax = axes[0]
+    epochs = np.arange(1, len(train_losses) + 1)
+    ax.semilogy(epochs, train_losses, "b-",  lw=1.5, label="Train")
+    ax.semilogy(epochs, val_losses,   "r--", lw=1.5, label="Validation")
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("MSE loss")
+    ax.set_title("Training curves")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    # ── |T| parity ─────────────────────────────────────────────────────────
+    ax = axes[1]
+    ax.scatter(true_amp, pred_amp, s=10, alpha=0.5, color="steelblue")
+    lo, hi = 0.0, 1.05
+    ax.plot([lo, hi], [lo, hi], "k--", lw=1, alpha=0.6, label="ideal")
+    mae = float(np.mean(np.abs(pred_amp - true_amp)))
+    ax.set_xlabel("True |T|")
+    ax.set_ylabel("Predicted |T|")
+    ax.set_title(f"|T| parity  (MAE = {mae:.4f})")
+    ax.set_xlim(lo, hi); ax.set_ylim(lo, hi)
+    ax.legend(fontsize=9)
+    ax.grid(True, alpha=0.3)
+
+    # ── ∠T parity ──────────────────────────────────────────────────────────
+    ax = axes[2]
+    true_deg = np.degrees(true_phase)
+    pred_deg = np.degrees(pred_phase)
+    ax.scatter(true_deg, pred_deg, s=10, alpha=0.5, color="darkorange")
+    lo2 = min(true_deg.min(), pred_deg.min()) - 5
+    hi2 = max(true_deg.max(), pred_deg.max()) + 5
+    ax.plot([lo2, hi2], [lo2, hi2], "k--", lw=1, alpha=0.6, label="ideal")
+    # circular MAE
+    mae_ph = float(np.degrees(np.mean(np.abs(
+        np.angle(np.exp(1j * np.radians(pred_deg - true_deg)))
+    ))))
+    ax.set_xlabel("True ∠T (°)")
+    ax.set_ylabel("Predicted ∠T (°)")
+    ax.set_title(f"∠T parity  (MAE = {mae_ph:.1f}°)")
+    ax.legend(fontsize=9)
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(filename, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"[viz] Saved: {filename}")
+
+
+def plot_optimised_design(
+    x_um, target_phases,
+    phases_opt, phases_nn,
+    widths_opt, widths_nn,
+    amps_opt, amps_nn,
+    opt_losses,
+    target_desc, filename,
+):
+    """
+    Four-panel summary of the inverse-design optimisation result.
+
+    Panel 1: Phase profile — target, surrogate-optimised, NN baseline
+    Panel 2: Pillar widths — surrogate-optimised vs NN baseline
+    Panel 3: Amplitude |T| — surrogate-optimised vs NN baseline
+    Panel 4: Optimisation loss curve
+
+    Parameters
+    ----------
+    x_um          : array  pillar x-positions in μm
+    target_phases : array  desired phases in radians
+    phases_opt    : array  surrogate-predicted phases at optimised widths
+    phases_nn     : array  phases from nearest-neighbour library lookup
+    widths_opt    : array  optimised pillar widths in μm
+    widths_nn     : array  NN-assigned pillar widths in μm
+    amps_opt      : array  surrogate-predicted amplitudes at optimised widths
+    amps_nn       : array  library amplitudes at NN-assigned widths
+    opt_losses    : list   loss per gradient-descent step
+    target_desc   : str    description for the figure title
+    filename      : str    output PNG path
+    """
+    _ensure_dir(filename)
+
+    fig, axes = plt.subplots(2, 2, figsize=(13, 9))
+    fig.suptitle(f"Inverse Design — {target_desc}", fontsize=13)
+    axes = axes.flatten()
+
+    x_nm = np.asarray(x_um) * 1000
+
+    # ── Phase profile ───────────────────────────────────────────────────────
+    ax = axes[0]
+    ax.plot(x_nm, np.degrees(target_phases), "k-",  lw=2,   label="Target")
+    ax.plot(x_nm, np.degrees(phases_opt),    "b-o",  ms=4,  lw=1.5,
+            label="Surrogate opt.")
+    ax.plot(x_nm, np.degrees(phases_nn),     "r--s", ms=4,  lw=1.5,
+            label="NN baseline")
+    ax.set_xlabel("x position (nm)")
+    ax.set_ylabel("Phase (degrees)")
+    ax.set_title("Phase profile")
+    ax.legend(fontsize=9)
+    ax.grid(True, alpha=0.3)
+
+    # ── Pillar widths ────────────────────────────────────────────────────────
+    ax = axes[1]
+    ax.step(x_nm, widths_opt * 1000, "b-",  lw=1.5, where="mid",
+            label="Surrogate opt.")
+    ax.step(x_nm, widths_nn  * 1000, "r--", lw=1.5, where="mid",
+            label="NN baseline")
+    ax.set_xlabel("x position (nm)")
+    ax.set_ylabel("Pillar width (nm)")
+    ax.set_title("Assigned pillar widths")
+    ax.legend(fontsize=9)
+    ax.grid(True, alpha=0.3)
+
+    # ── Amplitudes ───────────────────────────────────────────────────────────
+    ax = axes[2]
+    ax.plot(x_nm, amps_opt, "b-o",  ms=4, lw=1.5, label=f"Surrogate  "
+            f"(mean={amps_opt.mean():.3f})")
+    ax.plot(x_nm, amps_nn,  "r--s", ms=4, lw=1.5, label=f"NN baseline"
+            f"(mean={amps_nn.mean():.3f})")
+    ax.set_xlabel("x position (nm)")
+    ax.set_ylabel("|T|")
+    ax.set_ylim(0, 1.05)
+    ax.set_title("Transmission amplitude")
+    ax.legend(fontsize=9)
+    ax.grid(True, alpha=0.3)
+
+    # ── Optimisation loss ────────────────────────────────────────────────────
+    ax = axes[3]
+    ax.semilogy(np.arange(1, len(opt_losses) + 1), opt_losses,
+                "b-", lw=1.5)
+    ax.set_xlabel("Gradient step")
+    ax.set_ylabel("Loss")
+    ax.set_title("Optimisation convergence")
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(filename, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"[viz] Saved: {filename}")
