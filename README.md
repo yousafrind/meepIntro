@@ -16,6 +16,7 @@ Structured introduction to electromagnetic metasurface simulation and optimisati
 | 2 | Speed up base sims (resolution, symmetry, MPI) | ✅ complete |
 | 3 | Solver comparison: FDTD vs RCWA vs torcwa | ✅ complete |
 | 4 | Surrogate-model optimisation (GPU inference) | ✅ complete |
+| 5 | Broadband / achromatic design (multi-λ surrogate) | ✅ complete |
 
 ---
 
@@ -131,6 +132,37 @@ Output → `06_surrogate/results/`:
 - `optimised_design.png` — phase profile / widths / amplitudes / convergence
 
 **ROCm/CUDA**: `get_torch_device()` auto-detects GPU. Falls back to CPU silently.
+
+---
+
+## Phase 5 — Broadband / Achromatic Design
+
+`07_broadband/` extends the Phase 4 surrogate to support wavelength as an input,
+enabling a single set of pillar widths to satisfy the design target at multiple
+wavelengths simultaneously — the defining challenge of achromatic metalens design.
+
+```bash
+# Step 1: auto-generate RCWA data for each wavelength + train
+MEEP_NPROCS=1 python run.py 07_broadband/multiwl_train.py \
+    --wavelengths 0.45 0.532 0.633
+
+# Step 2: achromatic metalens (joint optimisation over all λ)
+python run.py 07_broadband/achromatic_design.py --target metalens --focal-len 10
+
+# Or achromatic beam steering
+python run.py 07_broadband/achromatic_design.py --target beam --angle 30
+```
+
+| Script | What it does |
+|--------|-------------|
+| `multiwl_train.py` | Generates per-λ RCWA libraries, trains 2-input MLP `[w/period, λ] → (|T|, ∠T)` |
+| `achromatic_design.py` | Joint gradient descent over all λ; compares vs per-λ NN baselines |
+
+Output → `07_broadband/results/`:
+- `multiwl_model.pt` — multi-wavelength surrogate weights
+- `multiwl_training.png` — loss curves + parity plots
+- `wl_<NNN>nm_library.npz` — per-wavelength RCWA PhaseLibrary files
+- `achromatic_design.png` — per-λ phase error comparison + convergence
 
 ---
 
@@ -254,6 +286,10 @@ meepIntro/
 │   ├── train.py                    ← train MLP on PhaseLibrary data
 │   ├── optimise.py                 ← gradient-based pillar width optimisation
 │   └── results/
+├── 07_broadband/                   ← Phase 5: achromatic / broadband design
+│   ├── multiwl_train.py            ← multi-λ MLP: [w/period, λ] → (|T|, ∠T)
+│   ├── achromatic_design.py        ← joint optimisation across wavelengths
+│   └── results/
 └── envs/
     └── meep_env.yml
 ```
@@ -370,6 +406,7 @@ needed, works in WSL/headless).
 | `plot_solver_comparison(widths_meep, ..., widths_rcwa, ...)` | MEEP vs RCWA overlay: |T| and ∠T side by side |
 | `plot_surrogate_training(train_losses, val_losses, pred_amp, ...)` | 3-panel: loss curves + |T| parity + ∠T parity |
 | `plot_optimised_design(x_um, target_phases, phases_opt, ...)` | 4-panel: phase profile, widths, amplitudes, convergence |
+| `plot_achromatic_design(x_um, wavelengths, target_phases, ...)` | Per-λ phase panels + widths + convergence |
 
 Output directories are created automatically.
 
