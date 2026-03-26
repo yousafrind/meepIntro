@@ -16,9 +16,16 @@ Usage
     --height     0.60          pillar height in μm
     --n-glass    1.5           substrate refractive index
     --resolution 64            MEEP pixels per μm
+                               Phase 2 guidance: 64=production, 32=fast preview.
+                               O(r³) scaling: 128 is 8× slower than 64.
     --n-widths   50            number of width samples
     --phase-step None          target phase step in degrees (overrides --n-widths)
+    --no-symmetry              disable Mirror(X) speedup (default: enabled)
     --outdir     results       where to save library + plots
+
+Mirror(X) symmetry is ON by default (~2× speedup; valid here because the
+pillar is centred at x=0 and the source is a normal-incidence plane wave).
+Disable only if benchmarking or debugging.
 
 Output
 ------
@@ -47,16 +54,20 @@ def parse_args():
         description="Unit cell sweep: build phase library for beam steering.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    p.add_argument("--material",   default="TiO2")
-    p.add_argument("--wavelength", type=float, default=0.532)
-    p.add_argument("--period",     type=float, default=0.25)
-    p.add_argument("--height",     type=float, default=0.60)
-    p.add_argument("--n-glass",    type=float, default=1.5, dest="n_glass")
-    p.add_argument("--resolution", type=int,   default=64)
-    p.add_argument("--n-widths",   type=int,   default=50,  dest="n_widths")
-    p.add_argument("--phase-step", type=float, default=None, dest="phase_step",
+    p.add_argument("--material",    default="TiO2")
+    p.add_argument("--wavelength",  type=float, default=0.532)
+    p.add_argument("--period",      type=float, default=0.25)
+    p.add_argument("--height",      type=float, default=0.60)
+    p.add_argument("--n-glass",     type=float, default=1.5, dest="n_glass")
+    p.add_argument("--resolution",  type=int,   default=64,
+                   help="Pixels/μm. 64=production, 32=preview. Runtime ∝ r³.")
+    p.add_argument("--n-widths",    type=int,   default=50, dest="n_widths")
+    p.add_argument("--phase-step",  type=float, default=None, dest="phase_step",
                    help="Target phase step in degrees; overrides --n-widths")
-    p.add_argument("--outdir",     default="results")
+    p.add_argument("--no-symmetry", action="store_false", dest="symmetry",
+                   default=True,
+                   help="Disable Mirror(X) symmetry (on by default, ~2× speedup)")
+    p.add_argument("--outdir",      default="results")
     return p.parse_args()
 
 
@@ -68,14 +79,15 @@ def main():
     print_platform_info()
 
     lib = sweep(
-        material   = args.material,
-        wavelength = args.wavelength,
-        period     = args.period,
-        height     = args.height,
-        n_glass    = args.n_glass,
-        resolution = args.resolution,
-        n_widths   = args.n_widths,
-        phase_step = args.phase_step,
+        material     = args.material,
+        wavelength   = args.wavelength,
+        period       = args.period,
+        height       = args.height,
+        n_glass      = args.n_glass,
+        resolution   = args.resolution,
+        n_widths     = args.n_widths,
+        phase_step   = args.phase_step,
+        use_symmetry = args.symmetry,
     )
 
     try:
@@ -99,3 +111,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

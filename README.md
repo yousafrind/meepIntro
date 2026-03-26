@@ -13,7 +13,7 @@ Structured introduction to electromagnetic metasurface simulation and optimisati
 | Phase | Goal | Status |
 |-------|------|--------|
 | 1 | MEEP fundamentals — 4 metasurface examples | ✅ complete |
-| 2 | Speed up base sims (resolution, symmetry, MPI) | 🔄 in progress |
+| 2 | Speed up base sims (resolution, symmetry, MPI) | ✅ complete |
 | 3 | Solver comparison: FDTD vs RCWA vs torcwa | planned |
 | 4 | Surrogate-model optimisation (GPU inference) | planned |
 

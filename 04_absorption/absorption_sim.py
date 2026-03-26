@@ -103,11 +103,15 @@ def parse_args():
     p.add_argument("--height",     type=float, default=HEIGHT)
     p.add_argument("--width",      type=float, default=WIDTH)
     p.add_argument("--n-glass",    type=float, default=N_GLASS, dest="n_glass")
-    p.add_argument("--resolution", type=int,   default=RESOLUTION)
+    p.add_argument("--resolution", type=int,   default=RESOLUTION,
+                   help="Pixels/μm. 32=preview, 64=production. Runtime ∝ r³.")
     p.add_argument("--nfreq",      type=int,   default=NFREQ,
                    help="Number of DFT frequency points")
     p.add_argument("--no-harminv", action="store_true", dest="no_harminv",
                    help="Skip Stage 2 harminv run")
+    p.add_argument("--no-symmetry", action="store_false", dest="symmetry",
+                   default=True,
+                   help="Disable Mirror(X) symmetry (on by default, ~2× speedup)")
     p.add_argument("--outdir",     default=OUT_DIR)
     return p.parse_args()
 
@@ -162,12 +166,13 @@ def _build_geometry(lyt, pillar_width, height, pillar_medium, n_glass):
 #  STAGE 1 — BROADBAND T/R SPECTRUM
 # ══════════════════════════════════════════════════════════════════════════════
 
-def run_broadband(args, pillar_medium, lyt):
+def run_broadband(args, pillar_medium, lyt, use_symmetry=True):
     """
     Two MEEP runs: reference (no pillar) then structure.
     Returns (freqs, T, R) arrays.
     """
     import meep as mp
+    symmetries = [mp.Mirror(mp.X)] if use_symmetry else []
 
     fcen   = 1.0 / args.wavelength           # centre frequency  [μm⁻¹]
     # Frequency range: fcen ± df/2 in wavelength → convert to freq width
@@ -218,6 +223,7 @@ def run_broadband(args, pillar_medium, lyt):
         sources=_make_source(fcen_src, df),
         k_point=mp.Vector3(),
         resolution=args.resolution,
+        symmetries=symmetries,
         eps_averaging=True,
     )
     tran_ref, refl_ref = _make_flux_monitors(sim_ref)
@@ -244,6 +250,7 @@ def run_broadband(args, pillar_medium, lyt):
         sources=_make_source(fcen_src, df),
         k_point=mp.Vector3(),
         resolution=args.resolution,
+        symmetries=symmetries,
         eps_averaging=True,
     )
     tran_str, refl_str = _make_flux_monitors(sim_str)
@@ -263,7 +270,8 @@ def run_broadband(args, pillar_medium, lyt):
 #  STAGE 2 — harminv RESONANCE EXTRACTION
 # ══════════════════════════════════════════════════════════════════════════════
 
-def run_harminv(args, pillar_medium, lyt, fcen_res, df_harminv=None):
+def run_harminv(args, pillar_medium, lyt, fcen_res, df_harminv=None,
+                use_symmetry=True):
     """
     Narrow-band MEEP run centred at fcen_res, with harminv at the monitor.
 
@@ -271,6 +279,7 @@ def run_harminv(args, pillar_medium, lyt, fcen_res, df_harminv=None):
     Modes with |err| > 0.1 or Q < 5 are filtered out.
     """
     import meep as mp
+    symmetries = [mp.Mirror(mp.X)] if use_symmetry else []
 
     if df_harminv is None:
         df_harminv = 0.4 * fcen_res   # search window: ±20% around resonance
@@ -299,6 +308,7 @@ def run_harminv(args, pillar_medium, lyt, fcen_res, df_harminv=None):
         sources=sources,
         k_point=mp.Vector3(),
         resolution=args.resolution,
+        symmetries=symmetries,
         eps_averaging=True,
     )
 
@@ -358,7 +368,8 @@ def main():
     lyt = _cell_layout(args.period, args.height, args.wavelength)
 
     # ── Stage 1: broadband spectrum ───────────────────────────────────────────
-    sim_str, freqs, T, R = run_broadband(args, medium, lyt)
+    sim_str, freqs, T, R = run_broadband(args, medium, lyt,
+                                          use_symmetry=args.symmetry)
     A = np.clip(1.0 - T - R, 0, 1)
 
     try:
@@ -390,7 +401,8 @@ def main():
         print(f"\n[stage2] harminv centred at λ = {peak_wl:.1f} nm "
               f"(f = {fcen_res:.3f} μm⁻¹) ...")
 
-        modes = run_harminv(args, medium, lyt, fcen_res)
+        modes = run_harminv(args, medium, lyt, fcen_res,
+                            use_symmetry=args.symmetry)
 
         if modes:
             print(f"\n[stage2] ── Resonances found ({len(modes)}) ─────────────")

@@ -16,7 +16,7 @@ Phase 3: Solver comparison — FDTD (MEEP) vs RCWA vs torcwa (GPU)
 Phase 4: Surrogate-model optimisation (PyTorch / ROCm)
 ```
 
-**Current status:** Phase 1 complete. Phase 2 in progress.
+**Current status:** Phase 1 complete. Phase 2 complete.
 - `01_beam_steering/` — complete (unit cell sweep + full array sim)
 - `02_metalens/` — complete (metalens phase profile + MEEP FDTD + ASM focal spot analysis)
 - `03_holography/` — complete (Gerchberg-Saxton phase retrieval + MEEP FDTD validation)
@@ -358,7 +358,9 @@ pip install torch --index-url https://download.pytorch.org/whl/rocm6.0
 - [x] `03_holography/` — done
 - [x] `04_absorption/` — done (broadband T/R/A + harminv Q-factor extraction)
 
-**Phase 2 — in progress**
+**Phase 2 — complete**
 - [x] `benchmarks/benchmark.py` — resolution / Mirror(X) symmetry / MPI scaling
-- [ ] Apply results: tune resolution + symmetry defaults in production scripts
-- [ ] Phase 3: RCWA solver comparison (torcwa)
+- [x] Apply results: Mirror(X) on by default in `unit_cell_sweep.py` and `04_absorption/absorption_sim.py`; resolution guidance added
+
+**Phase 3 — planned**
+- [ ] RCWA solver comparison (torcwa)
