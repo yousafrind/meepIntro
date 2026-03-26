@@ -563,3 +563,68 @@ def plot_benchmark_results(results, filename="benchmarks/results/benchmark.png")
     plt.savefig(filename, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"[viz] Saved: {filename}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  Solver comparison overlay (Phase 3)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def plot_solver_comparison(
+    widths_meep, amplitudes_meep, phases_meep,
+    widths_rcwa, amplitudes_rcwa, phases_rcwa,
+    period, wavelength,
+    filename,
+    label_meep="MEEP FDTD",
+    label_rcwa="torcwa RCWA",
+):
+    """
+    Two-panel overlay of |T| and ∠T vs pillar width for MEEP and RCWA.
+
+    Parameters
+    ----------
+    widths_meep / widths_rcwa       : array  pillar widths in μm
+    amplitudes_meep / amplitudes_rcwa: array  |T|
+    phases_meep / phases_rcwa       : array  ∠T in radians (unwrapped)
+    period      : float  unit cell period in μm (for title)
+    wavelength  : float  free-space wavelength in μm (for title)
+    filename    : str    output PNG path
+    """
+    _ensure_dir(filename)
+
+    widths_meep_nm = np.asarray(widths_meep) * 1000
+    widths_rcwa_nm = np.asarray(widths_rcwa) * 1000
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 5))
+    fig.suptitle(
+        f"Solver Comparison  |  λ = {wavelength*1000:.0f} nm"
+        f"  |  period = {period*1000:.0f} nm",
+        fontsize=13,
+    )
+
+    # ── |T| ──────────────────────────────────────────────────────────────────
+    ax1.plot(widths_meep_nm, amplitudes_meep,
+             "b-o", ms=4, lw=1.5, label=label_meep)
+    ax1.plot(widths_rcwa_nm, amplitudes_rcwa,
+             "r--s", ms=4, lw=1.5, label=label_rcwa)
+    ax1.set_xlabel("Pillar width (nm)")
+    ax1.set_ylabel("|T|")
+    ax1.set_ylim(0, 1.05)
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+    ax1.set_title("Transmission amplitude")
+
+    # ── ∠T ───────────────────────────────────────────────────────────────────
+    ax2.plot(widths_meep_nm, np.degrees(phases_meep),
+             "b-o", ms=4, lw=1.5, label=label_meep)
+    ax2.plot(widths_rcwa_nm, np.degrees(phases_rcwa),
+             "r--s", ms=4, lw=1.5, label=label_rcwa)
+    ax2.set_xlabel("Pillar width (nm)")
+    ax2.set_ylabel("Phase (degrees)")
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+    ax2.set_title("Transmission phase")
+
+    plt.tight_layout()
+    plt.savefig(filename, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"[viz] Saved: {filename}")

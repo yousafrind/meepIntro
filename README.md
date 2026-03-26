@@ -14,7 +14,7 @@ Structured introduction to electromagnetic metasurface simulation and optimisati
 |-------|------|--------|
 | 1 | MEEP fundamentals — 4 metasurface examples | ✅ complete |
 | 2 | Speed up base sims (resolution, symmetry, MPI) | ✅ complete |
-| 3 | Solver comparison: FDTD vs RCWA vs torcwa | planned |
+| 3 | Solver comparison: FDTD vs RCWA vs torcwa | ✅ complete |
 | 4 | Surrogate-model optimisation (GPU inference) | planned |
 
 ---
@@ -54,10 +54,49 @@ python run.py benchmarks/benchmark.py --mode mpi --max-procs 8
 Results → `benchmarks/results/` (PNG plot + text report + JSON).
 
 **Mirror(X) symmetry** is now a flag on all unit-cell sweeps:
+
 ```bash
 python run.py utils/sweep.py --symmetry --resolution 64 \
     --outdir 01_beam_steering/results
 ```
+
+---
+
+## Phase 3 — Solver Comparison (FDTD vs RCWA)
+
+`05_solver_comparison/` benchmarks MEEP FDTD against torcwa RCWA on the same
+unit-cell geometry.  RCWA solves Maxwell's equations analytically for periodic
+structures — orders of magnitude faster than FDTD with equivalent accuracy.
+
+```bash
+# Step 1: run RCWA sweep (seconds vs hours for MEEP)
+MEEP_NPROCS=1 python run.py 05_solver_comparison/rcwa_sim.py
+
+# Step 2: compare results (requires a MEEP library from 01_beam_steering)
+python run.py 05_solver_comparison/compare_solvers.py
+
+# Optional: pass MEEP sweep time for speed table
+python run.py 05_solver_comparison/compare_solvers.py --meep-time 1820
+
+# Shift RCWA phase curve to match MEEP reference convention
+python run.py 05_solver_comparison/compare_solvers.py --align-phase
+```
+
+| Script | What it does |
+|--------|-------------|
+| `rcwa_sim.py` | torcwa RCWA sweep → `rcwa_phase_library.npz` + diagnostic plot |
+| `compare_solvers.py` | Overlay |T| and ∠T; print speed table |
+
+Output → `05_solver_comparison/results/`:
+- `rcwa_phase_library.npz` — PhaseLibrary-compatible, usable in any Phase 1 sim
+- `rcwa_phase_library.png` — 4-panel diagnostic (amplitude + phase)
+- `solver_comparison.png`  — MEEP vs RCWA overlay
+
+**Installing torcwa** (not in `meep_env.yml` — CPU-only):
+```bash
+pip install torcwa
+```
+GPU (ROCm/CUDA) acceleration is automatic when PyTorch detects a GPU.
 
 ---
 
@@ -173,6 +212,10 @@ meepIntro/
 ├── benchmarks/                     ← Phase 2: see benchmarks/README.md
 │   ├── benchmark.py                ← resolution / symmetry / MPI benchmarks
 │   └── results/
+├── 05_solver_comparison/           ← Phase 3: FDTD vs RCWA
+│   ├── rcwa_sim.py                 ← torcwa RCWA sweep → PhaseLibrary
+│   ├── compare_solvers.py          ← overlay plot + speed table
+│   └── results/
 └── envs/
     └── meep_env.yml
 ```
@@ -286,6 +329,7 @@ needed, works in WSL/headless).
 | `plot_field_propagation(x_um, y_um, intensity_2d, ...)` | 2D |Ez|² propagation map |
 | `plot_hologram_comparison(theta, intensity, targets, ...)` | Farfield vs target markers + phase profile |
 | `plot_absorption_spectrum(wavelengths_nm, T, R, A, ...)` | 3-panel T / R / A spectrum with harminv resonance markers |
+| `plot_solver_comparison(widths_meep, ..., widths_rcwa, ...)` | MEEP vs RCWA overlay: |T| and ∠T side by side |
 
 Output directories are created automatically.
 

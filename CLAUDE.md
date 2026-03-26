@@ -16,12 +16,13 @@ Phase 3: Solver comparison — FDTD (MEEP) vs RCWA vs torcwa (GPU)
 Phase 4: Surrogate-model optimisation (PyTorch / ROCm)
 ```
 
-**Current status:** Phase 1 complete. Phase 2 complete.
+**Current status:** Phase 1 complete. Phase 2 complete. Phase 3 complete.
 - `01_beam_steering/` — complete (unit cell sweep + full array sim)
 - `02_metalens/` — complete (metalens phase profile + MEEP FDTD + ASM focal spot analysis)
 - `03_holography/` — complete (Gerchberg-Saxton phase retrieval + MEEP FDTD validation)
 - `04_absorption/` — complete (broadband T/R/A spectra + harminv Q-factor extraction)
 - `benchmarks/` — Phase 2: resolution / symmetry / MPI scaling benchmarks
+- `05_solver_comparison/` — Phase 3: torcwa RCWA sweep + MEEP vs RCWA overlay
 
 ---
 
@@ -339,6 +340,50 @@ pip install torch --index-url https://download.pytorch.org/whl/rocm6.0
 
 ---
 
+## Phase 3 — 05_solver_comparison/
+
+### Workflow
+
+```bash
+# Step 1: RCWA sweep (single-process, seconds vs hours for MEEP)
+MEEP_NPROCS=1 python run.py 05_solver_comparison/rcwa_sim.py
+
+# Step 2: compare against MEEP library
+python run.py 05_solver_comparison/compare_solvers.py \
+    --meep-lib 01_beam_steering/results/phase_library.npz \
+    --meep-time <seconds>    # optional: enables speed table
+```
+
+### `rcwa_sim.py`
+RCWA unit-cell sweep using `torcwa`.  Geometry matches `01_beam_steering`
+defaults (TiO2, period=250 nm, height=600 nm, λ=532 nm).
+
+Key parameters:
+
+| Parameter | Default | Note |
+|-----------|---------|------|
+| `FOURIER_ORDER` | 15 | N → (2N+1)² total plane waves |
+| `GEO_RESOLUTION` | 128 | Spatial grid pts per axis for pillar mask |
+| `N_WIDTHS` | 50 | Width samples |
+
+Output: `results/rcwa_phase_library.npz` (PhaseLibrary-compatible + `sweep_time_s`),
+`results/rcwa_phase_library.png`
+
+### `compare_solvers.py`
+Loads both libraries, prints metadata + optional speed table, saves
+`results/solver_comparison.png`.
+
+`--align-phase` shifts the RCWA curve so its first point matches the MEEP
+reference (removes global phase offset from different interface conventions).
+
+### Physics note
+RCWA S-parameters are inherently normalised (no separate reference run needed).
+The glass substrate → air output convention may introduce a fixed phase offset
+vs MEEP's `E_struct / E_ref` normalisation.  The relative shape (phase coverage,
+resonance features) is identical; only the absolute reference differs.
+
+---
+
 ## Conventions
 
 - All lengths in **micrometres (μm)** throughout — MEEP natural units with c=1
@@ -362,5 +407,10 @@ pip install torch --index-url https://download.pytorch.org/whl/rocm6.0
 - [x] `benchmarks/benchmark.py` — resolution / Mirror(X) symmetry / MPI scaling
 - [x] Apply results: Mirror(X) on by default in `unit_cell_sweep.py` and `04_absorption/absorption_sim.py`; resolution guidance added
 
-**Phase 3 — planned**
-- [ ] RCWA solver comparison (torcwa)
+**Phase 3 — complete**
+- [x] `05_solver_comparison/rcwa_sim.py` — torcwa RCWA unit-cell sweep → PhaseLibrary
+- [x] `05_solver_comparison/compare_solvers.py` — |T|/∠T overlay + speed table
+- [x] `utils/viz.py` — `plot_solver_comparison()` added
+
+**Phase 4 — planned**
+- [ ] Surrogate-model optimisation (PyTorch / ROCm)
