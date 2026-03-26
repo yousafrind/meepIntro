@@ -386,3 +386,180 @@ def plot_pillar_layout(x_positions, widths, pillar_height, period,
     plt.savefig(filename, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"[viz] Saved: {filename}")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Absorption spectrum + resonance markers
+# ──────────────────────────────────────────────────────────────────────────────
+
+def plot_absorption_spectrum(wavelengths_nm, T, R, A,
+                             resonances=None, filename="results/spectrum.png"):
+    """
+    Three-panel transmission / reflection / absorption spectrum.
+
+    Parameters
+    ----------
+    wavelengths_nm : array   wavelengths in nm
+    T              : array   transmission (0–1)
+    R              : array   reflection   (0–1)
+    A              : array   absorption = 1 − T − R
+    resonances     : list of dicts with keys:
+                       'wavelength_nm' : float  resonance wavelength
+                       'Q'             : float  quality factor (optional)
+                       'label'         : str    text label    (optional)
+                     Pass None to skip resonance markers.
+    filename       : str    output PNG path
+    """
+    _ensure_dir(filename)
+    fig, axes = plt.subplots(3, 1, figsize=(9, 10), sharex=True)
+    fig.suptitle("Resonant metasurface — Transmission / Reflection / Absorption")
+
+    panels = [
+        (axes[0], T, "Transmission", "tab:blue"),
+        (axes[1], R, "Reflection",   "tab:orange"),
+        (axes[2], A, "Absorption",   "tab:red"),
+    ]
+
+    for ax, vals, label, color in panels:
+        ax.plot(wavelengths_nm, vals, color=color, lw=1.5)
+        ax.set_ylabel(label)
+        ax.set_ylim(-0.02, 1.05)
+        ax.grid(True, alpha=0.3)
+        ax.axhline(0, color="k", lw=0.5, ls=":")
+
+        if resonances:
+            for res in resonances:
+                wl  = res["wavelength_nm"]
+                q   = res.get("Q", None)
+                lbl = res.get("label", f"Q={q:.0f}" if q else f"{wl:.0f} nm")
+                ax.axvline(wl, color="green", ls="--", lw=1.1, alpha=0.8)
+                if ax is axes[0]:
+                    ax.text(wl + 3, 0.55, lbl,
+                            color="green", fontsize=8, rotation=90, va="center")
+
+    axes[2].set_xlabel("Wavelength (nm)")
+    plt.tight_layout()
+    plt.savefig(filename, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"[viz] Saved: {filename}")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Benchmark results
+# ──────────────────────────────────────────────────────────────────────────────
+
+def plot_benchmark_results(results, filename="benchmarks/results/benchmark.png"):
+    """
+    Multi-panel benchmark summary plot.
+
+    Parameters
+    ----------
+    results : dict with optional keys:
+
+      'resolution' : dict
+          'resolutions'  : list of int    px/μm values
+          'times'        : list of float  wall-clock seconds per run
+          'n_cells'      : list of int    total grid cells (resolution²·sx·sy)
+
+      'symmetry' : dict
+          'resolutions'  : list of int
+          'times_nosym'  : list of float
+          'times_sym'    : list of float
+
+      'mpi' : dict
+          'nprocs'    : list of int
+          'times'     : list of float
+          'speedups'  : list of float   (t[0]/t[i])
+          'efficiencies' : list of float  (speedup/nprocs, percent)
+
+    filename : str  output PNG path
+    """
+    _ensure_dir(filename)
+    n_panels = sum(k in results for k in ("resolution", "symmetry", "mpi"))
+    if n_panels == 0:
+        return
+
+    fig, axes = plt.subplots(1, n_panels, figsize=(6 * n_panels, 5))
+    if n_panels == 1:
+        axes = [axes]
+    fig.suptitle("Phase 2 Performance Benchmarks", fontsize=13)
+
+    ax_idx = 0
+
+    # ── Resolution scaling ─────────────────────────────────────────────────
+    if "resolution" in results:
+        ax  = axes[ax_idx]; ax_idx += 1
+        res = results["resolution"]
+        rs  = res["resolutions"]
+        ts  = res["times"]
+        ax.plot(rs, ts, "o-", color="steelblue", lw=2, ms=7)
+        ax.set_xlabel("Resolution (px/μm)")
+        ax.set_ylabel("Wall time (s)")
+        ax.set_title("Resolution scaling\n(single unit cell)")
+        ax.grid(True, alpha=0.3)
+
+        # Annotate with O(r³) reference line
+        r0, t0 = rs[0], ts[0]
+        r_ref  = np.linspace(rs[0], rs[-1], 80)
+        ax.plot(r_ref, t0 * (r_ref / r0) ** 3, "k--", lw=1, alpha=0.5,
+                label="O(r³) theory")
+        ax.legend(fontsize=8)
+
+        # Secondary axis: speedup vs ref
+        ax2 = ax.twinx()
+        speedups = [ts[0] / t for t in ts]
+        ax2.plot(rs, speedups, "s--", color="orange", lw=1.2, ms=5, alpha=0.6)
+        ax2.set_ylabel("Speedup vs lowest res", color="orange")
+        ax2.tick_params(axis="y", labelcolor="orange")
+
+    # ── Symmetry comparison ────────────────────────────────────────────────
+    if "symmetry" in results:
+        ax  = axes[ax_idx]; ax_idx += 1
+        sym = results["symmetry"]
+        rs  = sym["resolutions"]
+        t_no  = sym["times_nosym"]
+        t_yes = sym["times_sym"]
+        x = np.arange(len(rs))
+        w = 0.35
+        ax.bar(x - w/2, t_no,  w, label="No symmetry", color="salmon",    alpha=0.85)
+        ax.bar(x + w/2, t_yes, w, label="Mirror(X)",   color="steelblue", alpha=0.85)
+        ax.set_xticks(x)
+        ax.set_xticklabels([f"{r}" for r in rs])
+        ax.set_xlabel("Resolution (px/μm)")
+        ax.set_ylabel("Wall time (s)")
+        ax.set_title("Symmetry speedup\n(Mirror(X) vs none)")
+        ax.legend(fontsize=9)
+        ax.grid(True, alpha=0.3, axis="y")
+        # Annotate speedup ratios
+        for xi, (tn, ts_) in enumerate(zip(t_no, t_yes)):
+            ax.text(xi, max(tn, ts_) * 1.04, f"×{tn/ts_:.1f}",
+                    ha="center", fontsize=8, color="navy")
+
+    # ── MPI scaling ────────────────────────────────────────────────────────
+    if "mpi" in results:
+        ax  = axes[ax_idx]; ax_idx += 1
+        mpi = results["mpi"]
+        np_ = mpi["nprocs"]
+        sp  = mpi["speedups"]
+        ef  = mpi["efficiencies"]
+
+        ax.plot(np_, sp, "o-", color="steelblue", lw=2, ms=7, label="Measured speedup")
+        ax.plot(np_, np_, "k--", lw=1, alpha=0.5, label="Ideal (linear)")
+        ax.set_xlabel("MPI processes")
+        ax.set_ylabel("Speedup")
+        ax.set_title("MPI strong scaling\n(unit cell, fixed problem size)")
+        ax.legend(fontsize=9)
+        ax.grid(True, alpha=0.3)
+
+        ax2 = ax.twinx()
+        ax2.plot(np_, ef, "s--", color="darkorange", lw=1.2, ms=5, alpha=0.7,
+                 label="Efficiency (%)")
+        ax2.set_ylabel("Parallel efficiency (%)", color="darkorange")
+        ax2.set_ylim(0, 110)
+        ax2.tick_params(axis="y", labelcolor="darkorange")
+        ax2.axhline(100, color="darkorange", lw=0.5, ls=":")
+
+    plt.tight_layout()
+    plt.savefig(filename, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"[viz] Saved: {filename}")

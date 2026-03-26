@@ -16,11 +16,12 @@ Phase 3: Solver comparison — FDTD (MEEP) vs RCWA vs torcwa (GPU)
 Phase 4: Surrogate-model optimisation (PyTorch / ROCm)
 ```
 
-**Current status:** Phase 1 in progress.
+**Current status:** Phase 1 complete. Phase 2 complete.
 - `01_beam_steering/` — complete (unit cell sweep + full array sim)
 - `02_metalens/` — complete (metalens phase profile + MEEP FDTD + ASM focal spot analysis)
 - `03_holography/` — complete (Gerchberg-Saxton phase retrieval + MEEP FDTD validation)
-- `04_absorption/` — not yet started
+- `04_absorption/` — complete (broadband T/R/A spectra + harminv Q-factor extraction)
+- `benchmarks/` — Phase 2: resolution / symmetry / MPI scaling benchmarks
 
 ---
 
@@ -158,6 +159,86 @@ python run.py 03_holography/hologram_sim.py --target-angles -45 0 45
 
 ---
 
+## 04_absorption
+
+**Workflow** (standalone — no phase library needed):
+
+```
+absorption_sim.py  (Stage 1: broadband)  →  T(ω), R(ω), A(ω) spectrum
+                   (Stage 2: harminv)    →  resonance freq, Q-factor, decay rate
+```
+
+**absorption_sim.py** — two-stage MEEP simulation:
+1. Broadband Gaussian source + DFT flux monitors → T/R/A spectrum
+2. Narrow Gaussian centred on peak absorption → harminv extracts modes
+
+Output: `results/epsilon_map.png`, `results/transmission_spectrum.png`,
+        `results/absorption.npz`
+
+**Key parameters:**
+
+| Parameter | Default | Note |
+|-----------|---------|------|
+| `MATERIAL` | TiO2 | Pillar material |
+| `PERIOD` | 0.35 μm | Unit cell period |
+| `HEIGHT` | 0.40 μm | Pillar height |
+| `WIDTH` | 0.21 μm | Pillar width (60% fill factor) |
+| `WAVELENGTH` | 0.55 μm | harminv search centre (≈ resonance) |
+| `BW` | 0.30 μm | Half-bandwidth of broadband source |
+| `NFREQ` | 150 | DFT frequency samples |
+| `RESOLUTION` | 32 px/μm | 32=fast, 64=accurate |
+
+```bash
+python run.py 04_absorption/absorption_sim.py
+python run.py 04_absorption/absorption_sim.py --resolution 64
+python run.py 04_absorption/absorption_sim.py --period 0.40 --height 0.50
+
+# Skip harminv (spectrum only)
+python run.py 04_absorption/absorption_sim.py --no-harminv
+```
+
+**Expected results**: Mie resonance dip in T near 500–600 nm; possible sharp
+Fano feature at Wood's anomaly λ_W = n_glass × period ≈ 525 nm; harminv
+Q = 10–100 for Mie, 100–1000 for GMR.
+
+---
+
+## Phase 2 — benchmarks/
+
+### `benchmarks/benchmark.py`
+Drives three performance benchmarks and reports wall-time tables + plots.
+
+```bash
+python run.py benchmarks/benchmark.py                # all three benchmarks
+python run.py benchmarks/benchmark.py --mode resolution
+python run.py benchmarks/benchmark.py --mode symmetry
+python run.py benchmarks/benchmark.py --mode mpi --max-procs 8
+python run.py benchmarks/benchmark.py --quick        # smoke-test in < 1 min
+```
+
+| Benchmark | What it measures |
+|-----------|-----------------|
+| `resolution` | Wall time at res=16/32/64/128; compares to O(r³) theory |
+| `symmetry` | Mirror(X) speedup (~2×) vs no-symmetry at fixed resolution |
+| `mpi` | Strong scaling speedup and parallel efficiency vs nprocs |
+
+Output: `benchmarks/results/benchmark.png`, `benchmark_report.txt`, `benchmark.json`
+
+**Mirror(X) symmetry** is now exposed in `utils/sweep.py`:
+
+```bash
+# Use symmetry in any sweep (halves x grid, ~2× speedup, valid for k=0)
+python run.py utils/sweep.py --symmetry --resolution 64
+```
+
+Or in Python:
+```python
+from utils.sweep import sweep
+lib = sweep(..., use_symmetry=True)
+```
+
+---
+
 ## Utils modules
 
 ### `utils/sweep.py`
@@ -229,6 +310,7 @@ Key functions:
 - `plot_focal_spot(...)` — |Ez|² at focal plane with FWHM annotation
 - `plot_field_propagation(...)` — 2D |Ez|² field map showing beam focusing
 - `plot_hologram_comparison(...)` — simulated farfield vs target markers + phase profile
+- `plot_absorption_spectrum(wavelengths_nm, T, R, A, resonances, filename)` — 3-panel T/R/A spectrum with harminv resonance markers
 
 ---
 
@@ -268,10 +350,17 @@ pip install torch --index-url https://download.pytorch.org/whl/rocm6.0
 
 ---
 
-## What's next (Phase 1 remaining work)
+## What's next
 
+**Phase 1 — complete**
 - [x] `01_beam_steering/` — done
 - [x] `02_metalens/` — done
 - [x] `03_holography/` — done
-- [ ] `04_absorption/` — transmission spectra, harminv for resonance finding
-- [ ] Phase 2: benchmark resolution/symmetry/MPI scaling on 01_beam_steering
+- [x] `04_absorption/` — done (broadband T/R/A + harminv Q-factor extraction)
+
+**Phase 2 — complete**
+- [x] `benchmarks/benchmark.py` — resolution / Mirror(X) symmetry / MPI scaling
+- [x] Apply results: Mirror(X) on by default in `unit_cell_sweep.py` and `04_absorption/absorption_sim.py`; resolution guidance added
+
+**Phase 3 — planned**
+- [ ] RCWA solver comparison (torcwa)

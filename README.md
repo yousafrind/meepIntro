@@ -12,8 +12,8 @@ Structured introduction to electromagnetic metasurface simulation and optimisati
 
 | Phase | Goal | Status |
 |-------|------|--------|
-| 1 | MEEP fundamentals — 4 metasurface examples | 🔄 in progress (3/4 done) |
-| 2 | Speed up base sims (resolution, symmetry, MPI) | planned |
+| 1 | MEEP fundamentals — 4 metasurface examples | ✅ complete |
+| 2 | Speed up base sims (resolution, symmetry, MPI) | ✅ complete |
 | 3 | Solver comparison: FDTD vs RCWA vs torcwa | planned |
 | 4 | Surrogate-model optimisation (GPU inference) | planned |
 
@@ -26,7 +26,38 @@ Structured introduction to electromagnetic metasurface simulation and optimisati
 | `01_beam_steering/` | Phase-gradient metasurface | Bloch BCs, phase library, angular spectrum | ✅ done |
 | `02_metalens/` | Focusing / flat metalens | Near-to-far (ASM), focal spot | ✅ done |
 | `03_holography/` | Farfield hologram (GS phase retrieval) | Iterative design, farfield FFT | ✅ done |
-| `04_absorption/` | Resonant absorber / filter | Transmission spectra, harminv | planned |
+| `04_absorption/` | Resonant absorber / filter | Broadband DFT flux, harminv Q | ✅ done |
+
+---
+
+## Phase 2 — Benchmarks
+
+```bash
+# Full benchmark suite
+python run.py benchmarks/benchmark.py
+
+# Quick smoke-test (< 1 min)
+python run.py benchmarks/benchmark.py --quick
+
+# Individual benchmarks
+python run.py benchmarks/benchmark.py --mode resolution --resolutions 16 32 64
+python run.py benchmarks/benchmark.py --mode symmetry
+python run.py benchmarks/benchmark.py --mode mpi --max-procs 8
+```
+
+| Benchmark | Output |
+|-----------|--------|
+| Resolution | Wall time vs px/μm + O(r³) reference |
+| Symmetry | Mirror(X) vs no-symmetry speedup bar chart |
+| MPI | Speedup + parallel efficiency vs nprocs |
+
+Results → `benchmarks/results/` (PNG plot + text report + JSON).
+
+**Mirror(X) symmetry** is now a flag on all unit-cell sweeps:
+```bash
+python run.py utils/sweep.py --symmetry --resolution 64 \
+    --outdir 01_beam_steering/results
+```
 
 ---
 
@@ -60,6 +91,10 @@ python run.py 03_holography/hologram_sim.py --target-angles -30 30
 python run.py 01_beam_steering/full_array_sim.py --angle 45 --wavelength 0.633
 python run.py 02_metalens/metalens_sim.py --focal-len 15 --lens-width 8
 python run.py 03_holography/hologram_sim.py --target-angles -45 0 45
+
+# 04_absorption — standalone (no phase library needed)
+python run.py 04_absorption/absorption_sim.py
+python run.py 04_absorption/absorption_sim.py --resolution 64 --period 0.40
 
 # Force fewer cores (e.g. for testing)
 MEEP_NPROCS=4 python run.py 01_beam_steering/unit_cell_sweep.py --n-widths 5 --resolution 32
@@ -132,7 +167,14 @@ meepIntro/
 ├── 03_holography/                  ← see 03_holography/README.md
 │   ├── hologram_sim.py             ← GS phase retrieval + MEEP farfield validation
 │   └── results/
-└── 04_absorption/                  ← planned
+├── 04_absorption/                  ← see 04_absorption/README.md
+│   ├── absorption_sim.py           ← broadband T/R/A spectrum + harminv Q
+│   └── results/
+├── benchmarks/                     ← Phase 2: see benchmarks/README.md
+│   ├── benchmark.py                ← resolution / symmetry / MPI benchmarks
+│   └── results/
+└── envs/
+    └── meep_env.yml
 ```
 
 ---
@@ -243,6 +285,7 @@ needed, works in WSL/headless).
 | `plot_focal_spot(x, intensity, ...)` | |Ez|² at focal plane with FWHM annotation |
 | `plot_field_propagation(x_um, y_um, intensity_2d, ...)` | 2D |Ez|² propagation map |
 | `plot_hologram_comparison(theta, intensity, targets, ...)` | Farfield vs target markers + phase profile |
+| `plot_absorption_spectrum(wavelengths_nm, T, R, A, ...)` | 3-panel T / R / A spectrum with harminv resonance markers |
 
 Output directories are created automatically.
 
