@@ -26,6 +26,7 @@ Phase 5: Broadband / achromatic design — multi-wavelength surrogate
 - `05_solver_comparison/` — Phase 3: torcwa RCWA sweep + MEEP vs RCWA overlay
 - `06_surrogate/` — Phase 4: MLP surrogate training + gradient-based inverse design
 - `07_broadband/` — Phase 5: multi-wavelength surrogate + achromatic metasurface design
+- `08_validation/` — Phase 6: FDTD ground-truth validation of surrogate designs
 
 ---
 
@@ -484,6 +485,40 @@ Output: `results/achromatic_design.npz`, `results/achromatic_design.png`
 
 ---
 
+## Phase 6 — 08_validation/
+
+### Workflow
+
+```bash
+# Requires achromatic_design.npz from Phase 5 and a MEEP phase library
+python run.py 08_validation/validate_design.py
+
+# Quick test at lower resolution
+python run.py 08_validation/validate_design.py --resolution 32
+
+# Validate specific wavelengths only
+python run.py 08_validation/validate_design.py --wavelengths 0.532
+```
+
+### `validate_design.py`
+Closes the design loop by running the Phase 5 achromatic pillar widths through
+MEEP FDTD and measuring actual focal-spot quality.
+
+Per wavelength, three designs are simulated:
+1. **Achromatic** (surrogate-optimised across all λ)
+2. **NN central-λ** (nearest-neighbour from central wavelength library)
+3. **NN per-λ** (best possible NN result for each individual wavelength)
+
+Metrics: FWHM (vs diffraction limit), peak focal intensity.
+Reuses `build_geometry`, `propagate_asm`, `compute_fwhm` from `02_metalens/metalens_sim.py`.
+Mirror(X) symmetry enabled for ~2× speedup.
+
+Output: `results/validation_summary.png` (FWHM + peak intensity comparison),
+`results/focal_spots_<WL>nm.png` (per-wavelength focal spot overlays),
+`results/validation.npz` (all numerical results)
+
+---
+
 ## Conventions
 
 - All lengths in **micrometres (μm)** throughout — MEEP natural units with c=1
@@ -521,3 +556,7 @@ Output: `results/achromatic_design.npz`, `results/achromatic_design.png`
 - [x] `07_broadband/multiwl_train.py` — multi-wavelength MLP: [w/period, λ] → (|T|, sin∠T, cos∠T)
 - [x] `07_broadband/achromatic_design.py` — joint gradient optimisation across multiple λ
 - [x] `utils/viz.py` — `plot_achromatic_design()` added
+
+**Phase 6 — complete**
+- [x] `08_validation/validate_design.py` — FDTD focal-spot validation of achromatic + NN designs
+- [x] `utils/viz.py` — `plot_validation_summary()` added

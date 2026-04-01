@@ -17,6 +17,7 @@ Structured introduction to electromagnetic metasurface simulation and optimisati
 | 3 | Solver comparison: FDTD vs RCWA vs torcwa | ✅ complete |
 | 4 | Surrogate-model optimisation (GPU inference) | ✅ complete |
 | 5 | Broadband / achromatic design (multi-λ surrogate) | ✅ complete |
+| 6 | FDTD ground-truth validation of surrogate designs | ✅ complete |
 
 ---
 
@@ -166,6 +167,39 @@ Output → `07_broadband/results/`:
 
 ---
 
+## Phase 6 — FDTD Validation
+
+`08_validation/` closes the design loop: takes the achromatic pillar widths from
+Phase 5, runs them through MEEP FDTD at each wavelength, and compares actual
+focal-spot quality against the nearest-neighbour baselines.
+
+```bash
+# Requires: 07_broadband/results/achromatic_design.npz
+#           01_beam_steering/results/phase_library.npz
+python run.py 08_validation/validate_design.py
+
+# Fast preview
+python run.py 08_validation/validate_design.py --resolution 32
+
+# Single wavelength
+python run.py 08_validation/validate_design.py --wavelengths 0.532
+```
+
+Three designs validated per wavelength:
+1. **Achromatic** — surrogate-optimised across all λ simultaneously
+2. **NN central-λ** — nearest-neighbour from the single-wavelength library
+3. **NN per-λ** — best possible nearest-neighbour for each wavelength individually
+
+Reuses `build_geometry`, `propagate_asm`, `compute_fwhm` from `02_metalens/` to
+avoid code duplication.  Mirror(X) symmetry enabled for ~2× speedup.
+
+Output → `08_validation/results/`:
+- `validation_summary.png` — FWHM and peak intensity vs λ for all three designs
+- `focal_spots_<WL>nm.png` — per-wavelength focal-plane profiles + 2D field map
+- `validation.npz` — all numerical results
+
+---
+
 ## Quick Start
 
 ### 1 — Install environment
@@ -290,6 +324,9 @@ meepIntro/
 │   ├── multiwl_train.py            ← multi-λ MLP: [w/period, λ] → (|T|, ∠T)
 │   ├── achromatic_design.py        ← joint optimisation across wavelengths
 │   └── results/
+├── 08_validation/                  ← Phase 6: FDTD ground-truth validation
+│   ├── validate_design.py          ← MEEP focal-spot validation vs baselines
+│   └── results/
 └── envs/
     └── meep_env.yml
 ```
@@ -407,6 +444,7 @@ needed, works in WSL/headless).
 | `plot_surrogate_training(train_losses, val_losses, pred_amp, ...)` | 3-panel: loss curves + |T| parity + ∠T parity |
 | `plot_optimised_design(x_um, target_phases, phases_opt, ...)` | 4-panel: phase profile, widths, amplitudes, convergence |
 | `plot_achromatic_design(x_um, wavelengths, target_phases, ...)` | Per-λ phase panels + widths + convergence |
+| `plot_validation_summary(wavelengths, results_ach, ...)` | FWHM + peak intensity vs λ for all three designs |
 
 Output directories are created automatically.
 

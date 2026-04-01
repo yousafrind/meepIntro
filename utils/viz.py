@@ -909,3 +909,82 @@ def plot_achromatic_design(
     plt.savefig(filename, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"[viz] Saved: {filename}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  Validation summary (Phase 6)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def plot_validation_summary(
+    wavelengths,
+    results_ach,
+    results_nn,
+    results_perwl,
+    filename,
+):
+    """
+    Two-panel summary comparing FDTD focal-spot metrics across wavelengths.
+
+    Panel 1: FWHM (nm) vs wavelength for all three designs + diffraction limit
+    Panel 2: Peak focal intensity vs wavelength (relative to per-λ NN peak)
+
+    Parameters
+    ----------
+    wavelengths   : list of float  wavelengths in μm
+    results_ach   : dict  keyed by wl_nm  (from validate_design.py)
+    results_nn    : dict  keyed by wl_nm
+    results_perwl : dict  keyed by wl_nm
+    filename      : str   output PNG path
+    """
+    _ensure_dir(filename)
+
+    wl_nm_list = [int(round(w * 1000)) for w in wavelengths]
+
+    def _get(results, key, wl_nm_list):
+        vals = []
+        for wl_nm in wl_nm_list:
+            v = results[wl_nm].get(key)
+            vals.append(v * 1000 if v is not None else np.nan)
+        return np.array(vals)
+
+    fwhm_ach   = _get(results_ach,   "fwhm_um",        wl_nm_list)
+    fwhm_nn    = _get(results_nn,    "fwhm_um",        wl_nm_list)
+    fwhm_pw    = _get(results_perwl, "fwhm_um",        wl_nm_list)
+    fwhm_dl    = _get(results_ach,   "fwhm_dl_um",     wl_nm_list)
+    peak_ach   = np.array([results_ach[n]["peak_intensity"]   for n in wl_nm_list])
+    peak_nn    = np.array([results_nn[n]["peak_intensity"]    for n in wl_nm_list])
+    peak_pw    = np.array([results_perwl[n]["peak_intensity"] for n in wl_nm_list])
+
+    wl_nm_arr = np.array(wl_nm_list, dtype=float)
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 5))
+    fig.suptitle("FDTD Validation — Focal Spot Metrics", fontsize=13)
+
+    # ── FWHM ──────────────────────────────────────────────────────────────────
+    ax1.plot(wl_nm_arr, fwhm_ach,  "b-o",  ms=7, lw=2,   label="Achromatic opt.")
+    ax1.plot(wl_nm_arr, fwhm_nn,   "r--s", ms=6, lw=1.5, label="NN central-λ")
+    ax1.plot(wl_nm_arr, fwhm_pw,   "g-.^", ms=6, lw=1.5, label="NN per-λ")
+    ax1.plot(wl_nm_arr, fwhm_dl,   "k:",   lw=1.5, alpha=0.6, label="Diffraction limit")
+    ax1.set_xlabel("Wavelength (nm)")
+    ax1.set_ylabel("FWHM (nm)")
+    ax1.set_title("Focal spot FWHM")
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+
+    # ── Peak intensity ─────────────────────────────────────────────────────────
+    # Normalise by per-λ NN peak (best possible NN at each λ)
+    ref = np.where(peak_pw > 0, peak_pw, 1.0)
+    ax2.plot(wl_nm_arr, peak_ach / ref, "b-o",  ms=7, lw=2,   label="Achromatic opt.")
+    ax2.plot(wl_nm_arr, peak_nn  / ref, "r--s", ms=6, lw=1.5, label="NN central-λ")
+    ax2.plot(wl_nm_arr, np.ones_like(wl_nm_arr), "g-.", lw=1.5,
+             alpha=0.6, label="NN per-λ (= 1.0)")
+    ax2.set_xlabel("Wavelength (nm)")
+    ax2.set_ylabel("Relative peak intensity")
+    ax2.set_title("Peak focal intensity\n(normalised to per-λ NN)")
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(filename, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"[viz] Saved: {filename}")
